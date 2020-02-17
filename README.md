@@ -2,7 +2,7 @@
 **Status:** Expect regular updates and bug fixes.
 # Solvent Extraction process design and simulation model
 
-Solvent Extraction process simulator
+Solvent Extraction process simulator - under development
 
 ## Links
 * Source code repository: https://github.com/solventx/solventx
