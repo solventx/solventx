@@ -1,0 +1,17 @@
+{
+"solventxHome": "C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx",
+"csvData":{"dfree":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\csv\\sxvinput.csv",
+           "main_sx_feed":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\csv\\mainsxflow.csv",
+           "mw":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\csv\\mw.csv",
+           "ndprcela":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\csv\\ndprcela.csv"
+          },
+"xmlData":{"xml1":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\xml\\PC88A_HCL_NdPrCeLa.xml",
+           "xml2":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\xml\\PC88A_HCL_NdPr.xml",
+           "xml3":"C:\\Users\\splathottam\\Box Sync\\GitHub\\solventx\\data\\xml\\PC88A_HCL_CeLa.xml"
+          },
+"moduleID":2,
+"stripGroup":4,
+"solvs": ["H2O(L)", "(HA)2(org)", "dodecane"],
+"REEs":{"1":["Nd","Pr","Ce","La"],"2":["Nd","Pr"],"3":["Ce","La"], "4":["Nd"],"5":["Ce"]} ,
+"phasenames": ["HCl_electrolyte","PC88A_liquid"]
+}

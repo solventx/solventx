@@ -49,11 +49,11 @@ x = x1+x2+x3 # input provided by AI environ
 
 """ instantiate solvent extraction object """
 obj = sx.solventx() 
-
+print('object:',obj)
 """ create variable space parameters """
 obj.create_var_space(x,components=len(obj.ree_mass), input_feeds=1)
 # myblack.var_names
-
+print(obj.x_space,obj.mod_space)
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """ Action methods """

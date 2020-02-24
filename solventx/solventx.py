@@ -4,85 +4,83 @@ from scipy.optimize import root
 import numpy as np
 import cantera as ct
 import pandas as pd
-import result_struct as rs
+from solventx import result_struct
+from solventx import utilities
 import operator
+import os
+
 
 
 class solventx:
-
-
-    dfree = pd.read_csv('data/sxvinput.csv') # ree feed compositions (g/L)
-    main_sx_feed = pd.read_csv('data/mainsxflow.csv')
-    mw   = pd.read_csv('data/mw.csv')
-    reecols = dfree.columns #[1:]
-
-    module_id               = 2
-    strip_group             = 4
-
-    #### Create custom data columns   #########################################
-    for ktem in reecols:
-        dfree[ktem+' '+str(module_id)] = dfree[ktem] * dfree['H2O Volume[L/hr]'] # g/L * L/hr = [g/hr]
-        
-    """ Load and join data from file """ #not be relevant to current problem
-    inputs = pd.read_csv('data/ndprcela.csv')
-    for item in inputs.columns:
-        dfree[item] = inputs[item][0]
-
-
+    
     immutable_var_names     = ['mol_frac']
     mutable_var_names       = ['H+ Extraction', 'H+ Scrub', 'H+ Strip', 'OA Extraction', 'OA Scrub', 'OA Strip', 'Recycle', 'Extraction', 'Scrub', 'Strip']
     feed_var_names          = ['(HA)2(org)']
 
 #    var_names               = ['(HA)2(org)',	'H+ Extraction', 'H+ Scrub',	'H+ Strip',	'OA Extraction',	'OA Scrub',	'OA Strip', 'Recycle','Extraction','Scrub', 'Strip']#,	'Nd Scrub',	'Pr Scrub',	'Ce Scrub',	'La Scrub']#,	'Nd',	'Pr',	'Ce',	'La','Factor']
-    solvs                   = ['H2O(L)', '(HA)2(org)', 'dodecane']
+   
     coltypes                = ['Extraction','Scrub','Strip']
     REEs                    = {1:['Nd','Pr','Ce','La'],2:['Nd','Pr'],3:['Ce','La'], 4:['Nd'],5:['Ce']}
-    phasenames              = ['HCl_electrolyte','PC88A_liquid']
-    
     ml2l                    = 0.001 # mililiter to liter
     scale                   = 1 # volumetric scaling from unit ml/sec
 
     g_2_kg         = 1 #0.001 # grams to kg
     s_2_h          = 1.0/3600 # seconds to hours
     
-
     
-    
-    def __init__(self, data=dfree,  mainsxflow=main_sx_feed, mw=mw, moduleID=module_id, stripGroup=strip_group, 
-                 prep_capex=0, prep_opex=0, prep_revenue=0, prep_npv=0, column_types = coltypes, imvn=immutable_var_names,
-                 mvn=mutable_var_names, fvn=feed_var_names, solvents=solvs, ree=REEs, phasenames=phasenames, g_2_kg=g_2_kg):
+    def __init__(self,config_file,prep_capex=0, prep_opex=0, prep_revenue=0, prep_npv=0):
                  
         """Constructor.
         """
-
-        if moduleID == 1:
-            target_conc = 22.05 # g/L  #9.95 #
-            xml = 'xml/PC88A_HCL_NdPrCeLa.xml'
-        elif moduleID == 2:
-            target_conc = 9.95 # g/L  #9.95 #
-            xml = 'xml/PC88A_HCL_NdPr.xml'
-        else:
-            target_conc = 12.1 # g/L  #9.95 #
-            xml = 'xml/PC88A_HCL_CeLa.xml'
-                
         
+        self.confDict = utilities.read_config(config_file)
+        solventxHome = self.confDict["solventxHome"]
+        self.csvData = self.confDict['csvData']
+        self.xmlData = self.confDict['xmlData']
+        #self.REEs = self.confDict["REEs"]
+        
+        self.dfree = pd.read_csv(os.path.join(solventxHome, self.csvData['dfree'])) # ree feed compositions (g/L)
+        self.main_sx_feed = pd.read_csv(os.path.join(solventxHome, self.csvData['main_sx_feed'])) 
+        self.mw = pd.read_csv(os.path.join(solventxHome, self.csvData['mw'])) 
+        self.reecols = self.dfree.columns
+        
+        self.moduleID = self.confDict['moduleID']
+        self.stripGroup = self.confDict['stripGroup']
+        
+        for ktem in self.reecols:  #### Create custom data columns   #########################################
+            self.dfree[ktem+' '+str(self.moduleID)] = self.dfree[ktem] * self.dfree['H2O Volume[L/hr]'] # g/L * L/hr = [g/hr]
+        
+        """ Load and join data from file """ #not be relevant to current problem
+        self.inputs = pd.read_csv(os.path.join(solventxHome, self.csvData['ndprcela']))
+        for item in self.inputs.columns:
+            self.dfree[item] = self.inputs[item][0]
+    
+        if self.moduleID == 1:
+            self.target_conc = 22.05 # g/L  #9.95 #
+            self.xml = os.path.join(solventxHome,self.xmlData['xml1'])
+        elif self.moduleID == 2:
+            self.target_conc = 9.95 # g/L  #9.95 #
+            self.xml = os.path.join(solventxHome,self.xmlData['xml2'])
+        else:
+            self.target_conc = 12.1 # g/L  #9.95 #
+            self.xml = os.path.join(solventxHome,self.xmlData['xml3'])
+                
         # Set required data
-        self.df             = data              
-        self.mainsxflow     = mainsxflow #  kg/hr
- 
-        self.xml           =  xml
-        self.phase_names    = phasenames # from xml input file
-        self.phase          = ct.import_phases(xml,self.phase_names) 
+        self.df             = self.dfree              
+        self.mainsxflow     = self.main_sx_feed   # kg/hr
+                 
+        self.phase_names    = self.confDict["phasenames"] # from xml input file
+        self.phase          = ct.import_phases(self.xml,self.phase_names) 
 
         # Derived and/or reusable system parameters        
-        self.column         = column_types #list(self.mod_input['Section']) # Column name
-        self.solv           = solvents # solvent list -.i.e., electrolyte, extractant and organic diluent
+        self.column         = self.coltypes  #list(self.mod_input['Section']) # Column name
+        self.solv           = self.confDict["solvs"] # solvent list -.i.e., electrolyte, extractant and organic diluent
         
         # ree by modules
-        self.ree            = ree[moduleID] # (rare earth) metal list
-        self.ree_strip      = ree[stripGroup] # Strip target
+        self.ree            = self.REEs[self.moduleID] # (rare earth) metal list
+        self.ree_strip      = self.REEs[self.stripGroup] # Strip target
         self.is_ree         = [1 if re in self.ree_strip else 0 for re in self.ree ]
-        self.MID            = moduleID
+        self.MID            = self.moduleID
                    
         # Cantera indices
         self.mix            = ct.Mixture(self.phase)
@@ -97,9 +95,9 @@ class solventx:
         self.Cl_Index       = self.mix.species_index(self.aq,'Cl-') # index of Cl in cantera species list
         
         # outer optimization parameter names        
-        self.immutable_var_names        = imvn 
-        self.mmutable_var_names         = mvn 
-        self.feed_var_names             = fvn 
+        #self.immutable_var_names        = imvn 
+        #self.mmutable_var_names         = mvn 
+        #self.feed_var_names             = fvn 
         
         self.canteranames   = self.mix.species_names
         self.fixed_species  = ['H2O(L)','OH-', 'Cl-', 'dodecane']
@@ -114,9 +112,9 @@ class solventx:
         self.rhoslv         = [1000, 960, 750] # [g/L]
 
         # Feed volume
-        self.ree_mass       = [self.df[ij+'Cl3 '+str(self.MID)][0]*(mw[ij][0]/mw[ij][0]) for ij in self.ree] # kg/hr of ree chloride
+        self.ree_mass       = [self.df[ij+'Cl3 '+str(self.MID)][0]*(self.mw[ij][0]/self.mw[ij][0]) for ij in self.ree] # kg/hr of ree chloride
         mree                = sum(self.ree_mass) # kg/hr
-        self.vol        = mree / g_2_kg / target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
+        self.vol        = mree / self.g_2_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
         self.df['H2O Volume[L/hr] '+str(self.MID)] = self.vol
         
         self.purity_spec    = .99 # not needed?
