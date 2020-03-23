@@ -69,7 +69,7 @@ class solventx:
         
         # ree by modules
         self.ree            = self.modulesData["input"] #self.REEs[self.moduleID] # (rare earth) metal list
-        self.ree_strip      = self.modulesData["1"]["strip_group"] #self.REEs[self.stripGroup] # Strip target
+        self.ree_strip      = self.modulesData["output"]["strip"] #self.REEs[self.stripGroup] # Strip target
         self.is_ree         = [1 if re in self.ree_strip else 0 for re in self.ree ]
         self.MID            = self.moduleID
                    
