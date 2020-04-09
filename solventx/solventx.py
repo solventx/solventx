@@ -4,85 +4,76 @@ from scipy.optimize import root
 import numpy as np
 import cantera as ct
 import pandas as pd
+
 import result_struct as rs
+import utilities
+import config
+
 import operator
+import os
 
 
 class solventx:
-
-
-    dfree = pd.read_csv('data/sxvinput.csv') # ree feed compositions (g/L)
-    main_sx_feed = pd.read_csv('data/mainsxflow.csv')
-    mw   = pd.read_csv('data/mw.csv')
-    reecols = dfree.columns #[1:]
-
-    module_id               = 2
-    strip_group             = 4
-
-    #### Create custom data columns   #########################################
-    for ktem in reecols:
-        dfree[ktem+' '+str(module_id)] = dfree[ktem] * dfree['H2O Volume[L/hr]'] # g/L * L/hr = [g/hr]
-        
-    """ Load and join data from file """ #not be relevant to current problem
-    inputs = pd.read_csv('data/ndprcela.csv')
-    for item in inputs.columns:
-        dfree[item] = inputs[item][0]
-
-
+    
     immutable_var_names     = ['mol_frac']
     mutable_var_names       = ['H+ Extraction', 'H+ Scrub', 'H+ Strip', 'OA Extraction', 'OA Scrub', 'OA Strip', 'Recycle', 'Extraction', 'Scrub', 'Strip']
     feed_var_names          = ['(HA)2(org)']
 
 #    var_names               = ['(HA)2(org)',	'H+ Extraction', 'H+ Scrub',	'H+ Strip',	'OA Extraction',	'OA Scrub',	'OA Strip', 'Recycle','Extraction','Scrub', 'Strip']#,	'Nd Scrub',	'Pr Scrub',	'Ce Scrub',	'La Scrub']#,	'Nd',	'Pr',	'Ce',	'La','Factor']
-    solvs                   = ['H2O(L)', '(HA)2(org)', 'dodecane']
+   
     coltypes                = ['Extraction','Scrub','Strip']
-    REEs                    = {1:['Nd','Pr','Ce','La'],2:['Nd','Pr'],3:['Ce','La'], 4:['Nd'],5:['Ce']}
-    phasenames              = ['HCl_electrolyte','PC88A_liquid']
-    
+    #REEs                    = {1:['Nd','Pr','Ce','La'],2:['Nd','Pr'],3:['Ce','La'], 4:['Nd'],5:['Ce']}
     ml2l                    = 0.001 # mililiter to liter
     scale                   = 1 # volumetric scaling from unit ml/sec
 
-    g_2_kg         = 1 #0.001 # grams to kg
-    s_2_h          = 1.0/3600 # seconds to hours
+    g_p_kg          = 1000 # grams to kg
+    s_p_h           = 3600 # seconds to hours
+    target_conc     =  45 #g/L
     
-
-    
-    
-    def __init__(self, data=dfree,  mainsxflow=main_sx_feed, mw=mw, moduleID=module_id, stripGroup=strip_group, 
-                 prep_capex=0, prep_opex=0, prep_revenue=0, prep_npv=0, column_types = coltypes, imvn=immutable_var_names,
-                 mvn=mutable_var_names, fvn=feed_var_names, solvents=solvs, ree=REEs, phasenames=phasenames, g_2_kg=g_2_kg):
+    def __init__(self,config_file,prep_capex=0, prep_opex=0, prep_revenue=0, prep_npv=0):
                  
         """Constructor.
         """
-
-        if moduleID == 1:
-            target_conc = 22.05 # g/L  #9.95 #
-            xml = 'xml/PC88A_HCL_NdPrCeLa.xml'
-        elif moduleID == 2:
-            target_conc = 9.95 # g/L  #9.95 #
-            xml = 'xml/PC88A_HCL_NdPr.xml'
-        else:
-            target_conc = 12.1 # g/L  #9.95 #
-            xml = 'xml/PC88A_HCL_CeLa.xml'
-                
+        
+        self.confDict = utilities.read_config(config_file)
+        solventxHome = self.confDict["solventxHome"]
+        self.csvData = self.confDict['csvData']
+        self.xmlData = self.confDict['xmlData']
+        self.modulesData = self.confDict['modules']      
+        
+        self.dfree = pd.read_csv(os.path.join(solventxHome, self.csvData['dfree'])) # ree feed compositions (g/L)
+        self.main_sx_feed = pd.read_csv(os.path.join(solventxHome, self.csvData['main_sx_feed'])) 
+        self.mw = pd.read_csv(os.path.join(solventxHome, self.csvData['mw'])) 
+#        self.reecols = self.dfree.columns        
+       
+        
+#        for ktem in self.reecols:  #### Create custom data columns   #########################################
+#            self.dfree[ktem+' '+str(self.moduleID)] = self.dfree[ktem] * self.dfree['H2O Volume[L/hr]'] # g/L * L/hr = [g/hr]
+#        
+#        """ Load and join data from file """ #not be relevant to current problem
+#        self.inputs = pd.read_csv(os.path.join(solventxHome, self.csvData['ndprcela']))
+#        for item in self.inputs.columns:
+#            self.dfree[item] = self.inputs[item][0]
+        
+       
+        self.xml = os.path.join(solventxHome,self.xmlData['xml'],self.xmlData['phase']+'_'+''.join(self.modulesData["input"])+'.xml')
         
         # Set required data
-        self.df             = data              
-        self.mainsxflow     = mainsxflow #  kg/hr
- 
-        self.xml           =  xml
-        self.phase_names    = phasenames # from xml input file
-        self.phase          = ct.import_phases(xml,self.phase_names) 
+        self.df             = self.dfree              
+        self.mainsxflow     = self.main_sx_feed   # kg/hr
+                 
+        self.phase_names    = self.confDict["phasenames"] # from xml input file
+        self.phase          = ct.import_phases(self.xml,self.phase_names) 
 
         # Derived and/or reusable system parameters        
-        self.column         = column_types #list(self.mod_input['Section']) # Column name
-        self.solv           = solvents # solvent list -.i.e., electrolyte, extractant and organic diluent
+        self.column         = self.coltypes  #list(self.mod_input['Section']) # Column name
+        self.solv           = self.confDict["solvents"] # solvent list -.i.e., electrolyte, extractant and organic diluent
         
         # ree by modules
-        self.ree            = ree[moduleID] # (rare earth) metal list
-        self.ree_strip      = ree[stripGroup] # Strip target
-        self.is_ree         = [1 if re in self.ree_strip else 0 for re in self.ree ]
-        self.MID            = moduleID
+        self.ree            = self.modulesData["input"] #self.REEs[self.moduleID] # (rare earth) metal list
+#        self.ree_strip      = self.modulesData["output"]["strip"] #self.REEs[self.stripGroup] # Strip target
+#        self.is_ree         = [1 if re in self.ree_strip else 0 for re in self.ree ]
+#        self.MID            = self.moduleID
                    
         # Cantera indices
         self.mix            = ct.Mixture(self.phase)
@@ -94,12 +85,8 @@ class solventx:
         
         self.HA_Index       = self.mix.species_index(self.org,'(HA)2(org)') # index of extractant in canera species list
         self.Hp_Index       = self.mix.species_index(self.aq,'H+') # index of H+ in cantera species list
-        self.Cl_Index       = self.mix.species_index(self.aq,'Cl-') # index of Cl in cantera species list
-        
-        # outer optimization parameter names        
-        self.immutable_var_names        = imvn 
-        self.mmutable_var_names         = mvn 
-        self.feed_var_names             = fvn 
+        self.Cl_Index       = self.mix.species_index(self.aq,'Cl-') # index of Cl in cantera species list        
+       
         
         self.canteranames   = self.mix.species_names
         self.fixed_species  = ['H2O(L)','OH-', 'Cl-', 'dodecane']
@@ -114,10 +101,21 @@ class solventx:
         self.rhoslv         = [1000, 960, 750] # [g/L]
 
         # Feed volume
-        self.ree_mass       = [self.df[ij+'Cl3 '+str(self.MID)][0]*(mw[ij][0]/mw[ij][0]) for ij in self.ree] # kg/hr of ree chloride
-        mree                = sum(self.ree_mass) # kg/hr
-        self.vol        = mree / g_2_kg / target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
-        self.df['H2O Volume[L/hr] '+str(self.MID)] = self.vol
+#        self.ree_mass       = [self.df[ij+'Cl3 '+str(self.MID)][0]*(self.mw[ij][0]/self.mw[ij][0]) for ij in self.ree] # kg/hr of ree chloride
+        
+   
+        self.ree_mass       = [self.df[ij][0] for ij in [kk+' (kg/hr)' for kk in self.ree] ]#
+        self.vol            = sum(self.ree_mass) / self.g_p_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
+        self.ree_conc       = [(ij/sum(self.ree_mass)) * self.target_conc for ij in self.ree_mass] #([kg/hr]/[kg/hr] )* [g/L] = [g/L]
+
+#        print('ree', self.ree)
+#        print('ree mass', self.ree_mass)
+#        print('target conc', self.target_conc)
+#        print('ree conc', self.ree_conc)
+#        print('total mass', sum(self.ree_mass))
+#        print('\n\n')
+        
+  
         
         self.purity_spec    = .99 # not needed?
         self.recov_spec     = .99 # not needed?
@@ -133,8 +131,6 @@ class solventx:
 
     # -- end function
   
-
-
 
     def get_mw(self, conv=ml2l):
         """ Initialize parameters for cantera simulation. init() calls this function"""
@@ -159,9 +155,56 @@ class solventx:
 
 
 
-    def create_var_space(self, x, components=4, input_feeds=1,): # Creates containers for process variables
 
-        self.x = x # do you prefer list or nparray?
+    def get_process(self):
+        """Get products."""
+        
+        
+        input_components = self.confDict['modules']['input']
+        strip_components = self.confDict['modules']['output']['strip']
+    
+#        print('input', input_components)
+#        print('strip', strip_components)
+#        print()
+    
+        n_components = len(input_components)
+        config_key = ''
+        
+        print(f'Looping through following modules config:{list(config.valid_processes.keys())}')
+        for key,config_dict in config.valid_processes.items():
+            
+           
+            if set(input_components) == set(config_dict['input']):
+                if set(strip_components) ==  set(config_dict['strip']):
+                    
+                    config_key = key
+        
+        if config_key:
+            print(f'Found the following process config:{key}')            
+        else:
+            raise ValueError(f'No valid configuration found for input:{input_components},strip:{strip_components}!')            
+       
+        modules = config.valid_processes[config_key]['modules']
+        x = []
+       
+        print(f'Process config {config_key}:Input:{input_components},Number of modules:{len(modules)}')
+        print('Modules info:')
+        for key,module in modules.items():
+            x.extend(module['x'])
+            print(f'Module {key}:{module["strip_group"]}')
+        print(f'x0:{x}')
+        
+        self.design_variables = x
+        self.modules = modules
+        self.num_input = n_components
+        self.config_key = config_key
+        
+    
+
+
+
+    def create_var_space(self, input_feeds=1,): # 
+
 
         var_space = {
             'immutable': {},
@@ -172,29 +215,32 @@ class solventx:
         x_space = {}
         
         immutable_var_names = ['mol_frac']
-        mutable_var_names   = ['H+ Extraction', 'H+ Scrub', 'H+ Strip', 'OA Extraction', 'OA Scrub', 'OA Strip', 'Recycle', 'Extraction', 'Scrub', 'Strip']
+#        mutable_var_names   = ['H+ Extraction', 'H+ Scrub', 'H+ Strip', 'OA Extraction', 'OA Scrub', 'OA Strip', 'Recycle', 'Extraction', 'Scrub', 'Strip']
         feed_var_names = ['(HA)2(org)']
-        lenx = len(mutable_var_names + feed_var_names)
+#        lenx = len(mutable_var_names + feed_var_names)
+
 
         index = 0
         for feed_num in range(input_feeds):
             var_space['mutable'][f'{feed_var_names[0]}-{feed_num}'] = index
             index += 1 
+
+
+        for key, value in self.modules.items():
             
-        count = 0
-        for module_num in range(components-1):
-            
-            mod_space[f'module-{module_num}'] = module_num
-            x_space[f'module-{module_num}'] = self.x[count:count+lenx]
-            count += lenx
-            
-            for i, var in enumerate(mutable_var_names):
-                var_space['mutable'][f'{var}-{module_num}'] = index
+            mod_space[f'module-{key}'] = key
+            x_space[f'module-{key}'] = value['x']
+
+            for i, var in enumerate(value['mvn']):
+                var_space['mutable'][f'{var}-{key}'] = index
                 index += 1
 
-        for comp_num in range(components):
-            var_space['immutable'][f'{immutable_var_names[0]}-{comp_num}'] = index
+
+        for comp_num in range(len(self.confDict['modules']['input'])):
+            var_space['immutable'][f'{immutable_var_names[0]}-{self.confDict["modules"]["input"][comp_num]}'] = index
             index += 1
+
+            
         self.var_space = var_space
         mutable = self.var_space['mutable']
         immutable = self.var_space['immutable']
@@ -202,10 +248,8 @@ class solventx:
         
         self.mod_space = mod_space
         self.x_space = x_space
-        self.num_feeds = len(mod_space) * len(self.column)
-
-
-
+        
+        
 		
     def flow_path_exist(self, var): # Not used in current implementation
         '''
@@ -230,195 +274,86 @@ class solventx:
 
     
 
-    def create_nsp_open(self, module, lim, init_recyc=0.0, g_2_kg=g_2_kg ): #, h0, target, xml, cantera_data, experiments):
+    def create_nsp_open(self, name, num ):# g_p_kg=g_p_kg ): #, h0, target, xml, cantera_data, experiments):
         
         """ Create mole flows for column feed streams in a given module. Arranges
             them in the dataframe, nsp, in the form that Cantera expects """
                
         nre                 = np.zeros(len(self.ree)) # REE specie moles
         salts               = np.zeros(len(self.ree)) # neutral complexe moles
-        name, num           = module.split('-')        
+        
+        strip_ree           = config.valid_processes[self.config_key]['modules'][num]['strip_group']
+        is_scrub            = [1 if re in strip_ree else 0 for re in self.ree]
+        
+#        name, num           = mod_space.split('-')        
 
                        
 #        Flows
-        orgvol              = self.orgvol[self.mod_space[module]]
+        orgvol              = self.orgvol[int(num)]
         aqvols              = [orgvol/(self.x[self.combined_var_space['OA Extraction-'+num]]),orgvol/(self.x[self.combined_var_space['OA Scrub-'+num]]), orgvol/(self.x[self.combined_var_space['OA Strip-'+num]]) ]
         
 
 #        Compositions   
         vol_HA              = orgvol *  (self.x[self.combined_var_space['(HA)2(org)-0']])
-        vol_dodec           = orgvol - vol_HA
+        vol_dodec           = orgvol - vol_HA                
         n_HA                = vol_HA * self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]
         n_dodec             = vol_dodec * self.rhoslv[self.solv.index('dodecane')]/self.mwslv[self.solv.index('dodecane')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]            
 
         for k in range(len(self.column)): # k represents different columns - extraction, scrub or strip
 
             # check for module ID, then determine upstream source
-            parent_col = get_parent(self.column[k]+'-'+num) 
-            
+#            parent_col = get_parent(self.column[k]+'-'+num) 
+      
             n_H2O           = aqvols[k] * self.rhoslv[self.solv.index('H2O(L)')]/self.mwslv[self.solv.index('H2O(L)')]  # [L/hr]*[g/L]/[g/mol] = [mol/hr]
             n_Hp            = aqvols[k] * (self.x[self.combined_var_space['H+ '+self.column[k]+'-'+num]])   # [L/hr]*[g/L]/[g/mol] = [mol/hr]
 
           
-            if k==0:
-                for re in self.ree:                     
-                    nre[self.ree.index(re)] = self.ree_mass[self.ree.index(re)]/g_2_kg / self.mwre[self.ree.index(re)] # [kg/hr]/[kg/g]/[g/mol] = [mol/hr]
+            if k==0: # extraction column: 
+                #check if there's a parent column. if there isn't, use primary feed, otherwise, 
+                # take the corresponding ree composition
+                # also take the corresponding H2O composition
+                parent_col = get_parent(self.column[k]+'-'+num) # if a parent module exists for ext column  
+                if parent_col:                       
+                    myree =  np.array(self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])
+                    for re in self.ree:                     
+                        nre[self.ree.index(re)] = myree[self.ree.index(re)] #[mol/hr]
+                        n_H2O = self.nsp[parent_col][self.canteranames.index('H2O(L)')]
+                else:
+                    for re in self.ree:                     
+                        nre[self.ree.index(re)] = self.ree_conc[self.ree.index(re)] * aqvols[k] / self.mwre[self.ree.index(re)] # [g/L]/[L/hr]/[g/mol] = [mol/hr]
 
             elif k==1:
-                uncle = get_parent(self.column[k-1]+'-'+num) # if a parent module exists for ext column  
-                if uncle:                       
-                    myree =  np.array(self.y[uncle][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])
-
-                    target_indices = highest_remaining(myree, lim)
-                    print('target_indices', target_indices)                     
-                    target_ree = myree[target_indices[:round( (len(myree)-lim)/2 )]] # replace 2 with something automatic later
-                    print('target_ree', target_ree)
-                    my_is_ree = [1 if ij in target_ree else 0 for ij in myree]
-                    
-                    for re in self.ree: 
-                        nre[self.ree.index(re)] = my_is_ree[self.ree.index(re)] *self.x[self.combined_var_space['Recycle-'+num]] *init_recyc* myree[self.ree.index(re)] # = [mol/hr]                   
-                else:
-                    
-                    for re in self.ree:                     
-                        nre[self.ree.index(re)] = self.is_ree[self.ree.index(re)] *self.x[self.combined_var_space['Recycle-'+num]] *init_recyc* self.ree_mass[self.ree.index(re)]/g_2_kg / self.mwre[self.ree.index(re)] # [kg/hr]/[kg/g]/[g/mol] = [mol/hr]
-                                                                                                                        # 0.05 makes it a small value
+                for re in self.ree:                     
+                    nre[self.ree.index(re)] =  is_scrub[self.ree.index(re)] * self.x[self.combined_var_space['Recycle-'+num]] * self.ree_conc[self.ree.index(re)] * aqvols[k] / self.mwre[self.ree.index(re)] # [1]*[g/L]/[L/hr]/[g/mol] = [mol/hr]
+                
+                                                                                                                                       # 0.05 makes it a small value
             else:
                 for re in self.ree:
                     nre[self.ree.index(re)] = 0.0                
                             
             n_Cl            = 3*(sum(nre)) + n_Hp # Cl- mole balance, all REEs come in as chlorides from leaching
-
-
-            # check for module ID, then determine upstream source
-            if parent_col: 
-                afa, okwa           = parent_col.split('-')        
-                
-                # mass balance for chloride ion
-                if afa == 'Strip': # if strip column, subtract the recycled portion to estimate equivalent recycle ratio 
-
-                    strips = np.array(self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])
-                    targ_ind = highest_remaining(strips, lim)
-                    strip_ree = strips[targ_ind[0]]
-                    scrub_ree = self.nsp['Scrub-'+okwa][self.canteranames.index('Cl-')+1+targ_ind[0]] # corresponding index in scrub-in
-
-                    recycle = scrub_ree/strip_ree # equivalent recycle ratio
-                    self.recycle.update({module:recycle})
-                    
-                    nre = [ij*(1-recycle) for ij in self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]] # no of moles of rare earth
-                    n_H2O = self.nsp['Strip-'+okwa][self.canteranames.index('H2O(L)')]*(1-recycle)
-                else:
-                    nre = self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
-                    n_H2O =self.nsp[parent_col][self.canteranames.index('H2O(L)')]
-                  
-                n_Cl = n_Hp + 3*sum(nre)
 
             n_specs         = [n_H2O,n_Hp,0,n_Cl]+[ii for ii in nre]+[n_HA,n_dodec] +[ij for ij in salts]
 
  
             # store in pandas dataframe
             self.nsp[self.column[k]+'-'+num]       = n_specs 
-            self.nsp0[self.column[k]+'-'+num]      = n_specs 
-
-
-
-
-
-    def create_nsp_loop(self, module, lim, init_recyc=0.0, g_2_kg=g_2_kg ): #, h0, target, xml, cantera_data, experiments):
-        
-        """ Create mole flows for column feed streams in a given module. Arranges
-            them in the dataframe, nsp, in the form that Cantera expects """
+            self.nsp0[self.column[k]+'-'+num]      = n_specs
                
-        nre                 = np.zeros(len(self.ree)) # REE specie moles
-        salts               = np.zeros(len(self.ree)) # neutral complexe moles
-        name, num           = module.split('-')        
-
-                       
-#        Flows
-        orgvol              = self.orgvol[self.mod_space[module]]
-        aqvols              = [orgvol/(self.x[self.combined_var_space['OA Extraction-'+num]]),orgvol/(self.x[self.combined_var_space['OA Scrub-'+num]]), orgvol/(self.x[self.combined_var_space['OA Strip-'+num]]) ]
-        
-
-#        Compositions   
-        vol_HA              = orgvol *  (self.x[self.combined_var_space['(HA)2(org)-0']])
-        vol_dodec           = orgvol - vol_HA
-        n_HA                = vol_HA * self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]
-        n_dodec             = vol_dodec * self.rhoslv[self.solv.index('dodecane')]/self.mwslv[self.solv.index('dodecane')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]            
-
-        for k in range(len(self.column)):
-
-            # check for module ID, then determine upstream source
-            parent_col = get_parent(self.column[k]+'-'+num) 
-            
-            n_H2O           = aqvols[k] * self.rhoslv[self.solv.index('H2O(L)')]/self.mwslv[self.solv.index('H2O(L)')]  # [L/hr]*[g/L]/[g/mol] = [mol/hr]
-            n_Hp            = aqvols[k] * (self.x[self.combined_var_space['H+ '+self.column[k]+'-'+num]])   # [L/hr]*[g/L]/[g/mol] = [mol/hr]
-
-          
-            if k==0:
-                for re in self.ree:                     
-                    nre[self.ree.index(re)] = self.ree_mass[self.ree.index(re)]/g_2_kg / self.mwre[self.ree.index(re)] # [kg/hr]/[kg/g]/[g/mol] = [mol/hr]
-
-
-            elif k==1:
-                uncle = get_parent(self.column[k-1]+'-'+num) # if a parent module exists for ext column  
-                if uncle:                       
-                    myree =  np.array(self.y[uncle][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]) #     maxids = np.array(myree).argsort()[-2:][::-1]
-
-                    # Replace section with something more automatated
-                    target_indices = highest_remaining(myree, lim) 
-                    target_ree = myree[target_indices[:round( (len(myree)-lim)/2 )]] # replace 2 with something automatic later
-                    my_is_ree = [1 if ij in target_ree else 0 for ij in myree]
-                    self.tindex.update({module:target_indices})
-                    for re in self.ree: 
-                        nre[self.ree.index(re)] = my_is_ree[self.ree.index(re)] *self.x[self.combined_var_space['Recycle-'+num]] *init_recyc* myree[self.ree.index(re)] # = [mol/hr]                   
-                else:
-                    
-                    for re in self.ree:                     
-                        nre[self.ree.index(re)] = self.is_ree[self.ree.index(re)] *self.x[self.combined_var_space['Recycle-'+num]] *init_recyc* self.ree_mass[self.ree.index(re)]/g_2_kg / self.mwre[self.ree.index(re)] # [kg/hr]/[kg/g]/[g/mol] = [mol/hr]
-                                                                                                                        # 0.05 makes it a small value
-            else:
-                for re in self.ree:
-                    nre[self.ree.index(re)] = 0.0                
-                            
-            n_Cl            = 3*(sum(nre)) + n_Hp # Cl- mole balance, all REEs come in as chlorides from leaching
-
-
-           
-            if parent_col: 
-                afa, okwa           = parent_col.split('-')        
-                
-                if afa == 'Strip':
-                    nre = [ij*(1-self.x[self.combined_var_space['Recycle-'+num]]) for ij in self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]]
-                    n_H2O = self.nsp['Strip-'+okwa][self.canteranames.index('H2O(L)')]*(1-self.x[self.combined_var_space['Recycle-'+num]])
-                    self.recycle.update({module:self.x[self.combined_var_space['Recycle-'+num]]})
-
-                else:
-                    nre = self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
-                    n_H2O = self.nsp[parent_col][self.canteranames.index('H2O(L)')]
-                   
-                n_Cl = n_Hp + 3*sum(nre)
-
-            n_specs         = [n_H2O,n_Hp,0,n_Cl]+[ii for ii in nre]+[n_HA,n_dodec] +[ij for ij in salts]
-
-            # store in pandas dataframe
-            self.nsp[self.column[k]+'-'+num]       = n_specs 
-            self.nsp0[self.column[k]+'-'+num]      = n_specs 
-
-
-                
                 
 
-    def eval_column(self, module, col):
+    def eval_column(self, num, col):
         
         """ This function evaluates the column to compute stream compositions
             for all stages """
-
-        name, num           = module.split('-')        
+       
         Ns                  = int(self.x[self.combined_var_space[col+'-'+num]]) # Ns (number of stages per column)
 
         # if Number of stages is zero, populate with default values        
         if Ns == 0:
-            resy = rs.result_struct([0]*len(self.canteravars), None,'No stages', 0)
-            
+            resy = rs.result_struct([0]*len(self.canteravars), None,'No stages', 10000)
+            self.nsp[col+'-'+num]       = [0 for ii in range(len(self.nsp0[col+'-'+num]))]                     
+                    
         else:
             ycol                = self.inity(col,num, Ns) # initialize y (stream vector)      
             resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='df-sane', options=None) # method='hybr', options=None) #options={'disp':True, 'maxfev':15}    
@@ -427,8 +362,19 @@ class solventx:
 
 
 
+    def update_nsp(self, resy, prev_col, num):
+        
+        col_index = self.column.index(prev_col)+1
+        
+        if col_index <= 2:
+            col = self.column[col_index] #self.column.index(col_index)]
+            self.nsp[col+'-'+num][self.naq:]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
+                    [jk for jk in resy.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from previous column
 
-    def evaluate_open(self, x, lim=2, g_2_kg=g_2_kg ): #
+
+
+
+    def evaluate_open(self, x,): #
         
         """ This is the simpler implementation of the process column design
             it avoids the need to converge recycle streams. For now, it is not
@@ -436,6 +382,10 @@ class solventx:
             the equivalent recycle amount)"""
 
         self.x                  = [i for i in x] 
+        
+#        for item, jtem in zip(self.var_space['mutable'].keys(), self.x):
+#            print (item, jtem)
+#            
         #        MID = ' '+str(self.MID)
         
         self.status         = {} # all status
@@ -443,168 +393,48 @@ class solventx:
         self.fun            = {} # all fun vals
         self.recycle        = {}
 
-        # Store all numbers of stages
-        for key in self.mod_space:
-            name, num           = key.split('-')
-            for item in self.column:
-                self.Ns.update( {item+'-'+num: int(self.x[self.combined_var_space[item+'-'+num]]) } )
-        
-        # Assuming org volumetric flow is the same at every extraction stage - This is for initialization
-        self.orgvol              = [self.vol * (self.x[self.combined_var_space['OA Extraction-0']]) 
+       # Assuming org volumetric flow is the same at every extraction stage - This is for initialization
+       
+        self.orgvol              = [self.vol * (self.x[self.combined_var_space['OA Extraction-'+self.mod_space[next(iter(self.mod_space))]]]) #---------------> should this go into loop;
                                         for ij in range(len(self.mod_space))]
+
+#        print(self.vol, self.orgvol)
+#        print('oa ext', self.x[self.combined_var_space['OA Extraction-0']])
         
-########################construct nsp - dataframe of feed species molar amounts ######################
-
         
-        for module in self.mod_space:
+        # Store all numbers of stages
+        for name, num in self.mod_space.items():
 
-            name, num           = module.split('-')
+#            self.orgvol              = [self.vol * (self.x[self.combined_var_space['OA Extraction-'+num]]) 
+#                                for ij in range(len(self.mod_space))]
 
-            self.create_nsp_open(module, lim, init_recyc=1)
+            ###########construct nsp - dataframe of feed species molar amounts ######################
 
-            # if No extraction column #########################################
-            if self.x[self.combined_var_space['Extraction-'+num]] == 0:
+            self.create_nsp_open(name, num) 
+
+
+            for col in self.column:
                 
-                rez = rs.result_struct([0]*len(self.canteravars), True,'No stages', 0)
+                self.Ns.update( {col+'-'+num: int(self.x[self.combined_var_space[col+'-'+num]]) } )
+                
+#            ########################## Evaluate extraction ########################
             
-                for item in self.column:
-                    
-                    self.y.update({item+'-'+num:rez.x})
-                    self.status.update({item+'-'+num:rez.status})
-                    self.msg.update({item+'-'+num:rez.message})
-                    self.fun.update({item+'-'+num:rez.fun})
+                resy               = self.eval_column(num,col)        
+        
+                self.y.update({col+'-'+num:[ij for ij in resy.x]})
+                self.status.update({col+'-'+num:resy.success})
+                self.msg.update({col+'-'+num:resy.message})
+                self.fun.update({col+'-'+num:resy.fun})
 
-            else:    
-        ########################## Evaluate extraction ########################
-        
-                resye               = self.eval_column(module,'Extraction')        
-        
-                self.y.update({'Extraction-'+num:[ij for ij in resye.x]})
-                self.status.update({'Extraction-'+num:resye.success})
-                self.msg.update({'Extraction-'+num:resye.message})
-                self.fun.update({'Extraction-'+num:resye.fun})
-    
-        
-        ########################## Evaluate scrub  ##############################
-                
-                self.nsp['Scrub-'+num][self.naq:]  =   [ resye.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp['Scrub-'+num][self.canteranames.index('dodecane')] ]+\
-                                    [jk for jk in resye.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from feed stage 1
-        
-                    
-                resysc               = self.eval_column(module, 'Scrub')        
-    
-                self.y.update({'Scrub-'+num:[ij for ij in resysc.x]})
-                self.status.update({'Scrub-'+num:resysc.success})
-                self.msg.update({'Scrub-'+num:resysc.message})
-                self.fun.update({'Scrub-'+num:resysc.fun})
-        
-        ########################## Evaluate strip ##############################
-        
-                self.nsp['Strip-'+num][self.naq:]  =   [ resysc.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp['Strip-'+num][self.canteranames.index('dodecane')] ]+\
-                                        [jk for jk in resysc.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from feed 'Strip'age 1
-        
-        
-                resyst               = self.eval_column(module,'Strip')        
-    
-                self.y.update({'Strip-'+num:[ij for ij in resyst.x]})
-                self.status.update({'Strip-'+num:resyst.success})
-                self.msg.update({'Strip-'+num:resyst.message})
-                self.fun.update({'Strip-'+num:resyst.fun})
+                self.update_nsp(resy, col, num)
 
-
-                self.recovery_open()#(resy.x)        
-                self.recovery_loop()#(resy.x)        
+#                
+        self.recovery_open()#(resy.x)        
+      
 
 ############################################################################### 
             
-        
-
-
-    def evaluate_loop(self, x, lim=0, g_2_kg=g_2_kg ): #, h0, target, xml, cantera_data, experiments):
-        """ This is a more representative implementation of the process column design
-            it explicitly converges recycle streams - but this makes it very expensive."""
-
-        self.x                  = [i for i in x] 
-
-        self.status         = {} # all status
-        self.msg            = {} # all msgs
-        self.fun            = {} # all fun vals
-        self.tindex         = {} # target indices for nre recycle convergence for downstream modules
-        self.recycle        = {}
-
-
-        # Store all stage numbers
-
-        for key in self.mod_space:
-            name, num           = key.split('-')
-            for item in self.column:
-                self.Ns.update( {item+'-'+num: int(self.x[self.combined_var_space[item+'-'+num]]) } )
-
-            
-        # Assuming org is the same at every extraction stage - This is for initialization
-        self.orgvol              = [self.vol * (self.x[self.combined_var_space['OA Extraction-0']]) 
-                                        for ij in range(len(self.mod_space))]
-        
-########################construct nsp#  dataframe of feed species molar amounts ######################
-
-        for module in self.mod_space:
-
-            name, num           = module.split('-')
-
-            self.create_nsp_loop(module, lim, init_recyc=0.05)
-            
-
-            # if No extraction column #########################################
-            if self.x[self.combined_var_space['Extraction-'+num]] == 0:
-                
-                rez = rs.result_struct([0]*len(self.canteravars), True,'No stages', 0)
-            
-                for item in self.column:
-                    
-                    self.y.update({item+'-'+num:rez.x})
-                    self.status.update({item+'-'+num:rez.status})
-                    self.msg.update({item+'-'+num:rez.message})
-                    self.fun.update({item+'-'+num:rez.fun})                   
-
-            else:    
-                    
-    ########################## Evaluate extraction ############################
-    
-                resye               = self.eval_column(module, 'Extraction')        
-        
-                self.y.update({'Extraction-'+num:[ij for ij in resye.x]})
-                self.status.update({'Extraction-'+num:resye.success})
-                self.msg.update({'Extraction-'+num:resye.message})
-                self.fun.update({'Extraction-'+num:resye.fun})
-        
-        ########################## Evaluate scrub & strip #####################
-                if num == '0' or lim==0:
-                    nre                 = np.array([ij for ij in self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq-lim]]) # only rare earths                    
-                    converge            = root(tearcolumns, nre, args=(self, resye.x, lim, num, module, 'Scrub','Strip'), method='excitingmixing', options=None)
-
-                else:
-                    # replace with something that scales with no. of components
-                    the_rees            = np.array([ij for ij in self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq]])#-lim]])
-                    nre                 = the_rees[self.tindex[module][:round( (len(the_rees)-lim)/2 )]]
-                    converge            = root(tearcol, nre, args=(self, resye.x, num, module, 'Scrub','Strip', lim), method='excitingmixing', options=None)
-
-        #############################update y vector of stream compositions####      
-                count = 1
-                for item in self.resy:
-    
-                    self.y.update({self.column[count]+'-'+num:[ij for ij in item.x]})
-                    self.status.update({self.column[count]+'-'+num:item.success})
-                    self.msg.update({self.column[count]+'-'+num:item.message})
-                    self.fun.update({self.column[count]+'-'+num:item.fun})
-                    count += 1
-                    
-                self.converge = converge                
-                
-                self.recovery_open()#(resy.x)        
-                self.recovery_loop()#(resy.x)        
-        
-
-
+ 
 
     def inity(self, col, num, Ns): # Initialize y
 
@@ -620,127 +450,64 @@ class solventx:
             
 
 
-    def  recovery_open(self):
-        
-        col_out = {} 
-        max_pur, purity  = {}, {}
-        max_recov, recovery = {}, {}
-        argmax = {}
-        reemax = {}
-        feed_in   = {} #self.nsp['Extraction-0'][self.canteranames.index('Cl-')+1:self.naq]        
-        scrub_in  = {} # for closed, do not use scrub in
 
-        parents = [get_parent(item) for item in self.y.keys() if get_parent(item) != None]            
+    def recovery_open(self):
         
-        for key, value in self.y.items():
-#            parent_col = get_parent(key)            
-            if key not in parents:               
-                feed_in.update({key: [ij for ij in self.nsp['Extraction-0'][self.canteranames.index('Cl-')+1:self.naq] ]})
-                stream = value[-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
-                col_out.update({key:stream})
-
-                purity.update({key: [i/sum(stream) for i in stream]})
-                max_pur.update({key:max(purity[key])})
-                argmax.update({key:np.argmax(purity[key])})
-                reemax.update({key:self.ree[argmax[key]]})
+        target = {}
+        recovery = {}
+        streams = {}
+        feeds = {}
+        purity = {}
+    
+        mod_nums = [key for key in config.valid_processes[self.config_key]['modules']]
+#        children = [get_child(item, mod_nums) for item in self.y.keys() if get_child(item, mod_nums) != None]
+        
+#        parents = [get_parent(item) for item in self.y.keys() if get_parent(item) != None]     
+        
+#        print('ykeys', self.y.keys())
+#        print ('parents', parents)
+    
+        for key in config.valid_processes[self.config_key]['modules']:
+    #        target['Strip-'+key] = config.valid_processes[self.config_key]['modules'][key]['strip_group'] # strip target
+    #        target['Scrub-'+key] = config.valid_processes[self.config_key]['modules'][key]['strip_group'] # strip target
+    #        target['Extraction-'+key] =  config.valid_processes[self.config_key]['modules'][key]['strip_group'] # extraction target
+    #        
+            for col in self.column:
                 
-                name, num           = key.split('-')        
-                if name == 'Scrub':
-                    scrub_in.update({key:[ij for ij in self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq] ]})
-                else:
-                    scrub_in.update({key:[0 for i in self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq]]})
-                   
-        scrubs = get_sums(scrub_in,'Scrub-0') 
-        feeds  = get_sums(feed_in,'Scrub-0')
-        feeds = [ij/len(feed_in) for ij in feeds]
-        
-        ins = [ij+jk for ij,jk in zip(feeds, scrubs)]
-        
-        for key, value in col_out.items():
-            recovery.update({key:[ij/jk for ij,jk in zip(col_out[key],ins) ]})
-            
-            max_recov.update({key: recovery[key][argmax[key]]})
-
-         
-        self.recovery = recovery
-        self.max_recov = max_recov
-        self.ree_max   = reemax
-        
-        self.purity  = purity
-        self.max_pur = max_pur
-        self.raffinates = col_out
-        
-        self.feed_in    = feed_in
-        self.parent_cols = parents
-        
-        self.total_feed = feeds
-        self.total_scrubs = scrubs
-
-
-
-
-    def  recovery_loop(self):
-        
-        col_out = {} 
-        max_pur, purity  = {}, {}
-        max_recov, recovery = {}, {}
-        argmax = {}  
-        reemax = {}
-        feed_in   = {} #self.nsp['Extraction-0'][self.canteranames.index('Cl-')+1:self.naq]        
-        scrub_in  = {} # for closed, do not use scrub in
-
-        parents = [get_parent(item) for item in self.y.keys() if get_parent(item) != None]            
-        
-        for key, value in self.y.items():
-
-            if key not in parents:                
-                feed_in.update({key: [ij for ij in self.nsp['Extraction-0'][self.canteranames.index('Cl-')+1:self.naq]]})
-                stream_0 = value[-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
-
-                name, num           = key.split('-')        
-                if name == 'Strip':
-                    stream = [ij-jk for ij,jk in zip(value[-self.nsy+self.canteravars.index('H+')+1:-self.norgy], self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq])]
-                else:
-                    stream = stream_0.copy() #value[-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
+                if get_child(col+'-'+key, mod_nums) == None:
+                
+#                if col+'-'+key in parents:
                     
-                col_out.update({key:stream})
-                purity.update({key: [i/sum(stream_0) for i in stream_0]})
-                max_pur.update({key:max(purity[key])})
-                argmax.update({key:np.argmax(purity[key])})
-                reemax.update({key:self.ree[argmax[key]]})
+                    if col == 'Strip':
+                        target[col+'-'+key] = config.valid_processes[self.config_key]['modules'][key]['strip_group'] # strip target
+                    else:
+                        target[col+'-'+key] = config.valid_processes[self.config_key]['modules'][key]['ext_group'] # non-strip target                                     
+                    
+                    streams[col+'-'+key] = self.y[col+'-'+key][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
+                    feeds[col+'-'+key] = self.nsp[col+'-'+key][self.canteranames.index('Cl-')+1:self.naq].values
+                    
+                    pure                 = [ij/sum(streams[col+'-'+key]) for ij in streams[col+'-'+key]]
+                    purity[col+'-'+key]  = sum([pure[self.ree.index(ik)] for ik in target[col+'-'+key] ] )
+                    
+    
+        feed_input = [0 for item in feeds[col+'-'+key]]            
+        for key, value in feeds.items():
+            feed_input = [ij + jk for ij, jk in zip(feed_input, value)] 
+    
+        for key, value in streams.items():
+            recover =  [ij/jk for ij, jk in zip(value, feed_input)]       
+            recovery[key] = [recover[self.ree.index(ik)] for ik in target[key]]
+                    
+                    
+        self.streams = streams
+        self.feeds = feeds
+        self.total_feeds = {ij:jk for ij, jk in zip(self.ree, feed_input)}
+        self.purity = purity
+        self.recovery = recovery
+        self.target_rees = target
+    
+    
 
-                name, num           = key.split('-')        
-                if name == 'Scrub':
-                    scrub_in.update({key:[ij for ij in self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq] ]})
-                else:
-                    scrub_in.update({key:[0 for ij in self.nsp['Scrub-'+num][self.canteranames.index('Cl-')+1:self.naq]]})
-
-
-        scrubs = get_sums(scrub_in,'Scrub-0')             
-        feeds  = get_sums(feed_in,'Scrub-0')
-        feeds = [ij/len(feed_in) for ij in feeds]
-        
-                
-        for key, value in col_out.items():
-            recovery.update({key:[ij/jk for ij,jk in zip(col_out[key],feed_in[key])]})
-            
-            max_recov.update({key: recovery[key][argmax[key]]})
-         
-        self.recovery_ = recovery
-        self.max_recov_ = max_recov
-        self.ree_max_   = reemax
-        
-        self.purity_  = purity
-        self.max_pur_ = max_pur
-        self.raffinates_ = col_out
-        
-        self.feed_in_    = feed_in
-        self.parent_cols_ = parents
-        
-        self.total_feed = feeds
-        self.total_scrubs = scrubs
-
-      
         
 # -- end class
 
@@ -783,7 +550,30 @@ def get_parent(var):
 
 
 
+def get_child(var, mod_nums):
+  '''
+    takes current module number (var), get child number from 
+    column (coltype), check if child number in mod_nums,
+    return child otherwise return None
 
+    Extraction-1 -> Extraction-4 if it exists
+	Extraction-0 -> Extraction-2 if it exists
+    Strip-0 -> Extraction-1 if it exists
+
+  '''
+ 
+  name, num = var.split('-')
+  if name == 'Scrub':
+      return None
+  else:
+      child = get_next(num,name)
+      if str(child) in mod_nums:
+          return 'Extraction-'+str(child)
+      else:
+          return None
+      
+        
+        
 def get_next(item_num, dir):
     '''
       returns next node number in tree in dir specified
@@ -826,89 +616,7 @@ def get_level(curNum):
     return level, pos
 
 
-
-
-def tearcolumns(nre, obj, y, lim, num, module, sc, st): #ree
    
-#    print('len y in tear', len(y))
-    
-    resy                = []
-    recycle             = obj.x[obj.combined_var_space['Recycle-'+num]]
-    
-    # update scrub feed with recycled stream
-    obj.nsp[sc+'-'+num] = [ij for ij in obj.nsp0[sc+'-'+num]] # update with primary scrub feed - no address sharing
-    
-
-    obj.nsp[sc+'-'+num][obj.canteranames.index('Cl-')+1:obj.naq-lim] = [max(0,ij) for ij in nre] # update ree !!!!!!!!!!REMOVED +=!!!!!!!!!!
-    obj.nsp[sc+'-'+num][obj.canteranames.index('Cl-')] =  obj.nsp[sc+'-'+num][obj.canteranames.index('H+')] + 3*sum(obj.nsp[sc+'-'+num][obj.canteranames.index('Cl-')+1:obj.naq] )# update cl
-    
-    
-    obj.nsp[sc+'-'+num][obj.naq:]  =   [ y[obj.canteravars.index('(HA)2(org)')] ] + [obj.nsp[sc+'-'+num][obj.canteranames.index('dodecane')] ]+\
-                            [jk for jk in y[obj.canteravars.index('(HA)2(org)')+1:obj.nsy]]  # org exit from feed stage 1
-
-        
-    resy.append( obj.eval_column(module, sc) )
-    y1                  = resy[0].x
-
-    ####################################################################
-
-    obj.nsp[st+'-'+num][obj.naq:]  =   [ y1[obj.canteravars.index('(HA)2(org)')] ] + [obj.nsp[st+'-'+num][obj.canteranames.index('dodecane')] ]+\
-                            [jk for jk in y1[obj.canteravars.index('(HA)2(org)')+1:obj.nsy]]  # org exit from feed stage 1
-
-    resy.append( obj.eval_column(module, st) )
-    
-    obj.resy = resy
-    
-    # compute strip exit ree molar amount
-    rhs = resy[1].x[-obj.nsy+obj.canteravars.index('H+')+1:-obj.norgy-lim] # 
-    
-#    print (sum(recycle * rhs - nre))
-
-    return (recycle * rhs) - nre
-
-
-
-def tearcol(nre, obj, y, num, module, sc, st, lim=0): #ree
-   
-#    print('len y in tear', len(y))
-#    index               = obj.tindex[module]
-    resy                = []
-    recycle             = obj.x[obj.combined_var_space['Recycle-'+num]]
-    
-    # update scrub feed with recycled stream
-    obj.nsp[sc+'-'+num] = [ij for ij in obj.nsp0[sc+'-'+num]] # update with primary scrub feed - no address sharing
-    
-    nindices = obj.canteranames.index('Cl-')+1 + np.array(obj.tindex[module][:round( (len(obj.ree)-lim)/2 )])[0] # first ree is the target one from recycle options
-    
-    obj.nsp[sc+'-'+num][nindices] = np.array([max(0,ij) for ij in nre])[0]  # update ree 
-    obj.nsp[sc+'-'+num][obj.canteranames.index('Cl-')] =  obj.nsp[sc+'-'+num][obj.canteranames.index('H+')] + 3*sum(obj.nsp[sc+'-'+num][obj.canteranames.index('Cl-')+1:obj.naq] )# update cl
-
-    
-    obj.nsp[sc+'-'+num][obj.naq:]  =   [ y[obj.canteravars.index('(HA)2(org)')] ] + [obj.nsp[sc+'-'+num][obj.canteranames.index('dodecane')] ]+\
-                            [jk for jk in y[obj.canteravars.index('(HA)2(org)')+1:obj.nsy]]  # org exit from feed stage 1
-
-        
-    resy.append( obj.eval_column(module, sc) )
-    y1                  = resy[0].x
-
-    ####################################################################
-
-    obj.nsp[st+'-'+num][obj.naq:]  =   [ y1[obj.canteravars.index('(HA)2(org)')] ] + [obj.nsp[st+'-'+num][obj.canteranames.index('dodecane')] ]+\
-                            [jk for jk in y1[obj.canteravars.index('(HA)2(org)')+1:obj.nsy]]  # org exit from feed stage 1
-
-    resy.append( obj.eval_column(module, st) )
-    
-    obj.resy = resy
-    
-    # compute strip exit ree molar amount
-    yindices = -obj.nsy+obj.canteravars.index('H+')+1 + np.array(obj.tindex[module][:round( (len(obj.ree)-lim)/2)])[0]
-    rhs = resy[1].x[yindices] # 
-    
-    return (recycle * rhs) - nre
-
-
-    
-    
 
 
 def eColOne (yI, obj, num, column, Ns, ree=[]) : # This should be equivalent to actual Lyon et al 4 recycling

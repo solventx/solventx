@@ -10,6 +10,9 @@ Created on Wed Aug 14 08:07:36 2019
 
 """ imports """
 import solventx as sx
+import config
+import utilities as util
+
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -30,93 +33,77 @@ here the main portion of the code begins. There are three evaluate options:
     results
 """    
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-
+   
+    
 """ Provide variable list   """
 
-# for option 1 (eval_open)
-x1 = [0.65,1e-5,1e-5,1.2,5.9,1.2,1.6,5,6,6,4]
-x2 = [1e-5,1e-5,1.2,6,1,4,0.51,1,8,2]
-x3 = [1e-5,1e-5,1.2,6,1,1,0.01,4,9,2]
-
-## for options 2 and 3 (eval_loop)
-#x1 = [0.65,1e-5,1e-5,1.2,5.9,1.2,1.6,0.89,6,6,4]
-#x2 = [1e-5,1e-5,1.2,6,1,4,0.89,1,8,2]
-#x3 = [1e-5,1e-5,1.2,6,1,1,0.89,4,9,2]
-
-x = x1+x2+x3 # input provided by AI environ
-
-
+config_file = "D:\\github\\solventx\\v4\\solventx-refactoring_siby_nw\\design.json"
 """ instantiate solvent extraction object """
-obj = sx.solventx() 
+
+obj = sx.solventx(config_file) 
+#print('object:',obj)
+
+obj.get_process()
+print ('\nnumber of components', obj.num_input ,'\n')
+
 
 """ create variable space parameters """
-obj.create_var_space(x,components=len(obj.ree_mass), input_feeds=1)
-# myblack.var_names
+obj.create_var_space(input_feeds=1)
+
+#for key, value in obj.var_space['mutable'].items():
+#    print (key, ': ', value)
+#print()
+#
+#for key, value in obj.var_space['immutable'].items():
+#    print (key, ': ', value)
+#print()
+#
+#for key, value in obj.mod_space.items():
+#    print (key, ': ', value)
+#print()
+#
+#for key, value in obj.x_space.items():
+#    print (key, ': ', value)
+#print()
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """ Action methods """
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+#design_variables = obj.x
 
-""" Option 1 : ~ 1 sec; use for initial training"""
+
+""" Option 1 : ~ 1 sec; use for initial training 
+    You improve purity by directly adding pure strip target elements to the scrub column
+    you set the recycle ratio limit to a maximum of 1, even though it can be higher than 1
+    you require high recovery to ensure your column is actually doing work"""
+
 #t = time.time()
-obj.evaluate_open(x) # 
+obj.evaluate_open(obj.design_variables) # 
 #print('Option 1 time', time.time() - t)
-
-
-""" Option 2 - partially closed recycle loop """
-#t = time.time()
-#myblack.evaluate_loop(x, lim=len(myblack.ree_strip)) # Recycle strip target ree
-#print('Option 2 time', time.time() - t)
-
-
-""" Option 3 - closed recycle loop: ~15 secs; use for main training """
-#obj.evaluate_loop(x,lim=0) # Recycle all ree
+##
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """ Processing outputs """
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-
+print()
 """ Recovery - dictionary of rare earth output stream fractional recovery values by column
       recovery values = amount of ree in raffinate stream/amount of ree in original feed stream """
-obj.recovery_ # closed loop recycle calculation - more accurate
 obj.recovery # open loop recycle calculation - less accurate
 
 
 """ Purity - dictionary of rare earth output stream fractional compositions by column
      # purity values = amount of ree in raffinate/total ree in raffinate stream """
-obj.purity_ # closed loop recycle calculation - more accurate
 obj.purity # open loop recycle calculation - less accurate
 
 
-""" Raffinates - dictionary of output stream stream molar amounts/flows by column """
-obj.raffinates_
-obj.raffinates
 
-
-""" max_recov - dictionary of the rare earth recovery value that corresponds to the highest purity  by column """
-obj.max_recov_
-obj.max_recov
-
-
-""" max_pur - dictionary of maximum purity values by column """
-obj.max_pur_
-obj.max_pur
-
-""" ree_max - dictionary of rare earths that have the maximum composition by column """
-obj.ree_max_
-obj.ree_max # both return the same REE acronyms
-     
-
-
-
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-""" visualize what you can't see """
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-## plot results - will implemen later 
+#""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+#""" visualize what you can't see """
+#""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+### plot results - will implemen later 
 
 
