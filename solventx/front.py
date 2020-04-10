@@ -1,16 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
-front page
-
-Created on Wed Aug 14 08:07:36 2019
-
-@author: ciloeje
-"""
 
 
 """ imports """
 import solventx as sx
-import config
 import utilities as util
 
 
@@ -37,11 +29,10 @@ here the main portion of the code begins. There are three evaluate options:
     
 """ Provide variable list   """
 
-config_file = "D:\\github\\solventx\\v4\\solventx-refactoring_siby_nw\\design.json"
+config_file = "solventx\\design.json"
 """ instantiate solvent extraction object """
 
 obj = sx.solventx(config_file) 
-#print('object:',obj)
 
 obj.get_process()
 print ('\nnumber of components', obj.num_input ,'\n')
@@ -71,8 +62,6 @@ obj.create_var_space(input_feeds=1)
 """ Action methods """
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-#design_variables = obj.x
-
 
 """ Option 1 : ~ 1 sec; use for initial training 
     You improve purity by directly adding pure strip target elements to the scrub column
@@ -101,9 +90,9 @@ obj.purity # open loop recycle calculation - less accurate
 
 
 
-#""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-#""" visualize what you can't see """
-#""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-### plot results - will implemen later 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+""" visualize outcomes """
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+## plot results - will implement later 
 
 
