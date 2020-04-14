@@ -2,7 +2,7 @@
 
 
 """ imports """
-import solventx as sx
+import solventx_B as sx
 import utilities as util
 
 
@@ -29,7 +29,8 @@ here the main portion of the code begins. There are three evaluate options:
     
 """ Provide variable list   """
 
-config_file = "solventx\\design.json"
+#config_file = "solventx\\design.json"
+config_file = "D:\\github\\solventx\\solventx\\design_.json"
 """ instantiate solvent extraction object """
 
 obj = sx.solventx(config_file) 
@@ -71,7 +72,6 @@ obj.create_var_space(input_feeds=1)
 #t = time.time()
 obj.evaluate_open(obj.design_variables) # 
 #print('Option 1 time', time.time() - t)
-##
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -81,18 +81,55 @@ obj.evaluate_open(obj.design_variables) #
 print()
 """ Recovery - dictionary of rare earth output stream fractional recovery values by column
       recovery values = amount of ree in raffinate stream/amount of ree in original feed stream """
-obj.recovery # open loop recycle calculation - less accurate
+obj.recovery # 
 
 
 """ Purity - dictionary of rare earth output stream fractional compositions by column
      # purity values = amount of ree in raffinate/total ree in raffinate stream """
-obj.purity # open loop recycle calculation - less accurate
+obj.purity # 
 
+
+""" Target - dictionary of target rare earth IDs by final column
+"""
+obj.target_rees # 
+
+
+""" Streams - dictionary of all streams leaving the three columns in each module
+"""
+obj.streams # 
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """ visualize outcomes """
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-## plot results - will implement later 
-
+### plot results - only for testing config.valid_processes == f
+### test to see how recovery and purity vary with Extractant concentration
+#
+#import numpy as np
+#import pandas as pd
+#recov = []
+#pur = []
+#for ha in np.arange(0.3,0.8, 0.05):
+#    obj.design_variables[obj.var_space['mutable']['(HA)2(org)-0']] = ha
+#    obj.evaluate_open(obj.design_variables)
+#    
+#    recov.append(obj.recovery['Strip-0'])
+#    pur.append(obj.purity['Strip-0'])
+#
+#df = pd.DataFrame(recov, columns=['Nd Recovery','Pr Recovery'])   
+#df['Purity'] = pur
+#df['Index'] = np.arange(0.3,0.8, 0.05)
+#
+#
+#import matplotlib.pyplot as plt
+#import pandas as pd
+#
+## gca stands for 'get current axis'
+#ax = plt.gca()
+#
+#df.plot(kind='line',x='Index',y='Nd Recovery',ax=ax)
+#df.plot(kind='line',x='Index',y='Pr Recovery',ax=ax)
+#df.plot(kind='line',x='Index',y='Purity',ax=ax)
+#
+#plt.show()
 

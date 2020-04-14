@@ -234,7 +234,7 @@ class solventx:
         return (False, self.variables[index] > 0)[index != None]
 
 
-    
+
 
     def create_nsp_open(self, name, num ):# g_p_kg=g_p_kg ): #, h0, target, xml, cantera_data, experiments):
         
@@ -246,39 +246,50 @@ class solventx:
         
         strip_ree           = config.valid_processes[self.config_key]['modules'][num]['strip_group']
         is_scrub            = [1 if re in strip_ree else 0 for re in self.ree]
+
         
-                       
-#        Flows
-        orgvol              = self.orgvol[int(num)]
+        # Determine if there is a parent column or not    
+        if int(num) > 0: # 
+            nnum = str(int(num)-1)
+            salts = np.array(self.y['Strip-'+nnum][self.canteravars.index('(HA)2(org)')+1:self.nsy]) # organic exit rees
+            n_HA = np.array(self.y['Strip-'+nnum][self.canteravars.index('(HA)2(org)')]) # organic exit rees
+            vol_HA = n_HA / (self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')])
+            n_dodec = self.nsp0['Strip-'+nnum][self.canteranames.index('dodecane')]
+            vol_dodec = n_dodec/(self.rhoslv[self.solv.index('dodecane')]/self.mwslv[self.solv.index('dodecane')])
+            orgvol = vol_HA + vol_dodec
+            
+
+        else:            
+        #        Compositions   
+            orgvol              = self.orgvol[int(num)]
+            vol_HA              = orgvol *  (self.x[self.combined_var_space['(HA)2(org)-0']])
+            vol_dodec           = orgvol - vol_HA                
+            n_HA                = vol_HA * self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]
+            n_dodec             = vol_dodec * self.rhoslv[self.solv.index('dodecane')]/self.mwslv[self.solv.index('dodecane')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]            
+ 
         aqvols              = [orgvol/(self.x[self.combined_var_space['OA Extraction-'+num]]),orgvol/(self.x[self.combined_var_space['OA Scrub-'+num]]), orgvol/(self.x[self.combined_var_space['OA Strip-'+num]]) ]
-        
-
-#        Compositions   
-        vol_HA              = orgvol *  (self.x[self.combined_var_space['(HA)2(org)-0']])
-        vol_dodec           = orgvol - vol_HA                
-        n_HA                = vol_HA * self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]
-        n_dodec             = vol_dodec * self.rhoslv[self.solv.index('dodecane')]/self.mwslv[self.solv.index('dodecane')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]            
-
+            
         for k in range(len(self.column)): # k represents different columns - extraction, scrub or strip
-
+    
             n_H2O           = aqvols[k] * self.rhoslv[self.solv.index('H2O(L)')]/self.mwslv[self.solv.index('H2O(L)')]  # [L/hr]*[g/L]/[g/mol] = [mol/hr]
             n_Hp            = aqvols[k] * (self.x[self.combined_var_space['H+ '+self.column[k]+'-'+num]])   # [L/hr]*[g/L]/[g/mol] = [mol/hr]
-
+    
           
             if k==0: # extraction column: 
                 #check if there's a parent column. if there isn't, use primary feed, otherwise, 
-                # take the corresponding ree composition
-                # also take the corresponding H2O composition
+                # take the corresponding parent aqueous composition data
                 parent_col = get_parent(self.column[k]+'-'+num) # if a parent module exists for ext column  
-                if parent_col:                       
+                if parent_col: 
+                    myree =  np.array(self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])  
+                    n_H2O = self.nsp[parent_col][self.canteranames.index('H2O(L)')]   
+                    n_Hp  = self.x[self.combined_var_space['H+ '+self.column[k]+'-'+num]] * n_H2O / (self.rhoslv[self.solv.index('H2O(L)')]/self.mwslv[self.solv.index('H2O(L)')])
                     for re in self.ree:                     
-                        myree =  np.array(self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])
                         nre[self.ree.index(re)] = myree[self.ree.index(re)] #[mol/hr]
-                        n_H2O = self.nsp[parent_col][self.canteranames.index('H2O(L)')]
+
                 else:
                     for re in self.ree:                     
                         nre[self.ree.index(re)] = self.ree_conc[self.ree.index(re)] * aqvols[k] / self.mwre[self.ree.index(re)] # [g/L]/[L/hr]/[g/mol] = [mol/hr]
-
+    
             elif k==1:
                 for re in self.ree:                     
                     nre[self.ree.index(re)] =  is_scrub[self.ree.index(re)] * self.x[self.combined_var_space['Recycle-'+num]] * self.ree_conc[self.ree.index(re)] * aqvols[k] / self.mwre[self.ree.index(re)] # [1]*[g/L]/[L/hr]/[g/mol] = [mol/hr]
@@ -286,17 +297,19 @@ class solventx:
                                                                                                                                        # 0.05 makes it a small value
             else:
                 for re in self.ree:
-                    nre[self.ree.index(re)] = 0.0                
-                            
+                    nre[self.ree.index(re)] = 0.0              
+
             n_Cl            = 3*(sum(nre)) + n_Hp # Cl- mole balance, all REEs come in as chlorides from leaching
-
+    
             n_specs         = [n_H2O,n_Hp,0,n_Cl]+[ii for ii in nre]+[n_HA,n_dodec] +[ij for ij in salts]
-
- 
+    
+     
             # store in pandas dataframe
             self.nsp[self.column[k]+'-'+num]       = n_specs 
             self.nsp0[self.column[k]+'-'+num]      = n_specs
-               
+
+
+
                 
 
     def eval_column(self, num, col):
@@ -323,12 +336,11 @@ class solventx:
         
         col_index = self.column.index(prev_col)+1
         
-        if col_index <= 2:
+        if col_index <= 2:            
             col = self.column[col_index] #self.column.index(col_index)]
+                        
             self.nsp[col+'-'+num][self.naq:]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
                     [jk for jk in resy.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from previous column
-
-
 
 
     def evaluate_open(self, x,): #
@@ -443,9 +455,8 @@ class solventx:
         self.total_feeds = {ij:jk for ij, jk in zip(self.ree, feed_input)}
         self.purity = purity
         self.recovery = recovery
+        self.target_rees = target
     
-    
-
         
 # -- end class
 
@@ -484,7 +495,7 @@ def get_parent(var):
     return None
   parentNum = (num-1)//2
 #  print('child', var, '   parent', (f'Extraction-{parentNum}',f'Strip-{parentNum}')[num % 2 == 0])
-  return (f'Extraction-{parentNum}',f'Strip-{parentNum}')[num % 2 == 0]
+  return (f'Strip-{parentNum}',f'Extraction-{parentNum}')[num % 2 == 0]
 
 
 
