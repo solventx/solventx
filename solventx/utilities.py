@@ -1,6 +1,6 @@
 #Utility functions for Gym
 import json
-import config
+from solventx import config
 
 
 def read_config(file_name):

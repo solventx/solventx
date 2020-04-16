@@ -2,8 +2,8 @@
 
 
 """ imports """
-import solventx_B as sx
-import utilities as util
+from solventx import solventx as sx
+from solventx import utilities as util
 
 
 
@@ -30,7 +30,7 @@ here the main portion of the code begins. There are three evaluate options:
 """ Provide variable list   """
 
 #config_file = "solventx\\design.json"
-config_file = "D:\\github\\solventx\\solventx\\design_.json"
+config_file = ".\\design.json"
 """ instantiate solvent extraction object """
 
 obj = sx.solventx(config_file) 

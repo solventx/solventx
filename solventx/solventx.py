@@ -5,9 +5,9 @@ import numpy as np
 import cantera as ct
 import pandas as pd
 
-import result_struct as rs
-import utilities
-import config
+from solventx import result_struct as rs
+from solventx import utilities
+from solventx import config
 
 import operator
 import os
@@ -145,7 +145,7 @@ class solventx:
                     config_key = key
         
         if config_key:
-            print(f'Found the following process config:{key}')            
+            print(f'Found the following process config:{config_key}')            
         else:
             raise ValueError(f'No valid configuration found for input:{input_components},strip:{strip_components}!')            
        
