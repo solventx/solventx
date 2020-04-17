@@ -5,7 +5,6 @@ from solventx import config
 
 def read_config(file_name):
     """Load config json file and return dictionary."""
-    print(file_name)
     
     with open(file_name, "r") as config_file:
         print(f'Reading configuration file:{config_file.name}')
