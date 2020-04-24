@@ -159,7 +159,7 @@ class solventx:
             print(f'Module {key}:{module["strip_group"]}')
         print(f'x0:{x}')
         
-        self.design_variables = x
+        self.x = x
         self.modules = modules
         self.num_input = n_components
         self.config_key = config_key
