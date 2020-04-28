@@ -326,8 +326,10 @@ class solventx:
                     
         else:
             ycol                = self.inity(col,num, Ns) # initialize y (stream vector)      
-            resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='df-sane', options=None) # method='hybr', options=None) #options={'disp':True, 'maxfev':15}    
-
+            try: #Solve design and check for convergence
+                resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='df-sane', options=None) # method='hybr', options=None) #options={'disp':True, 'maxfev':15}    
+            except:                
+                raise RuntimeError('Convergence failure in root function!')
         return resy
 
 
