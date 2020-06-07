@@ -22,7 +22,8 @@ class solventx:
     g_p_kg          = 1000 # grams to kg
     s_p_h           = 3600 # seconds to hours
     target_conc     =  45 #g/L
-    
+
+
     def __init__(self,config_file,prep_capex=0, prep_opex=0, prep_revenue=0, prep_npv=0):
                  
         """Constructor.
@@ -30,20 +31,13 @@ class solventx:
         
         self.confDict = utilities.read_config(config_file)
         solventxHome = self.confDict["solventxHome"]
-        self.csvData = self.confDict['csvData']
+        reeComps = self.confDict['compositions']
         self.xmlData = self.confDict['xmlData']
         self.modulesData = self.confDict['modules']      
-        
-        self.dfree = pd.read_csv(os.path.join(solventxHome, self.csvData['dfree'])) # ree feed compositions (g/L)
-        self.main_sx_feed = pd.read_csv(os.path.join(solventxHome, self.csvData['main_sx_feed'])) 
-        self.mw = pd.read_csv(os.path.join(solventxHome, self.csvData['mw'])) 
-        
-       
+               
         self.xml = os.path.join(solventxHome,self.xmlData['xml'],self.xmlData['phase']+'_'+''.join(self.modulesData["input"])+'.xml')
         
         # Set required data
-        self.df             = self.dfree              
-        self.mainsxflow     = self.main_sx_feed   # kg/hr
                  
         self.phase_names    = self.confDict["phasenames"] # from xml input file
         self.phase          = ct.import_phases(self.xml,self.phase_names) 
@@ -79,12 +73,14 @@ class solventx:
         self.mwre,\
         self.mwslv          = self.get_mw() # g/mol
         self.rhoslv         = [1000, 960, 750] # [g/L]
-   
-        self.ree_mass       = [self.df[ij][0] for ij in [kk+' (kg/hr)' for kk in self.ree] ]#
-        self.vol            = sum(self.ree_mass) / self.g_p_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
-        self.ree_conc       = [(ij/sum(self.ree_mass)) * self.target_conc for ij in self.ree_mass] #([kg/hr]/[kg/hr] )* [g/L] = [g/L]
 
-        
+   
+        self.upper = [reeComps[i]['upper'] for i in self.ree]
+        self.lower = [reeComps[i]['lower'] for i in self.ree]
+        ree_mass = [np.random.uniform(i,j) for i,j in zip(self.lower, self.upper)]       
+        self.get_conc(ree_mass)
+
+                        
         self.purity_spec    = .99 # not needed?
         self.recov_spec     = .99 # not needed?
         
@@ -97,8 +93,11 @@ class solventx:
         self.y              = {} # all compositions
         self.Ns             = {}
 
-    # -- end function
-  
+
+    def get_conc(self,ree_mass):
+        self.ree_mass       = ree_mass
+        self.vol            = sum(self.ree_mass) / self.g_p_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
+        self.ree_conc       = [(ij/sum(self.ree_mass)) * self.target_conc for ij in self.ree_mass] #([kg/hr]/[kg/hr] )* [g/L] = [g/L]  
 
     def get_mw(self, conv=ml2l):
         """ Initialize parameters for cantera simulation. init() calls this function"""
@@ -326,8 +325,10 @@ class solventx:
                     
         else:
             ycol                = self.inity(col,num, Ns) # initialize y (stream vector)      
-            resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='df-sane', options=None) # method='hybr', options=None) #options={'disp':True, 'maxfev':15}    
-
+            try: #Solve design and check for convergence
+                resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='hybr', options=None) # method='hybr', options=None) #method='df-sane' #options={'disp':True, 'maxfev':15}    
+            except (RuntimeError,EOFError):                
+                raise RuntimeError('Convergence failure in root function!')
         return resy
 
 
