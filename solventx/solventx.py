@@ -1,49 +1,89 @@
+"""
+This describes the solvent extraction model for simulating REE components
+separation in a multi-stage process. This contains the solvent extraction object 
+definition and methods (including objective function/reward and constraints) 
+that can be passed to a RL Agent or an external optimizer
+- Research supported by the US Department of Energy 
 
+This Implementation embeds the RBFOPT Black-box function Implementation adapted
+for optimizing this solvent extraction design. 
+RBFOPT details:
+-Licensed under Revised BSD license, see LICENSE.
+-(C) Copyright Singapore University of Technology and Design 2014.
+-(C) Copyright International Business Machines Corporation 2016.
+-Research partially supported by SUTD-MIT International Design Center.
+
+
+"""
+
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
 from scipy.optimize import root
 import numpy as np
 import cantera as ct
 import pandas as pd
+import rbfopt
 
 from solventx import result_struct as rs
-from solventx import utilities
 from solventx import config
 
 import operator
 import os
 
 
-class solventx:
-       
+
+class solventx(rbfopt.RbfoptBlackBox):
+
+    """
+     Attributes
+    ----------
+
+    dimension : int
+        Dimension of the problem.
+        
+    var_lower : 1D numpy.ndarray[float]
+        Lower bounds of the decision variables.
+
+    var_upper : 1D numpy.ndarray[float]
+        Upper bounds of the decision variables.
+
+    var_type : 1D numpy.ndarray[char]
+        An array of length equal to dimension, specifying the type of
+        each variable. Possible types are 'R' for real (continuous)
+        variables, and 'I' for integer (discrete) variables.
+
+    integer_vars : 1D numpy.ndarray[int]
+        A list of indices of the variables that must assume integer
+        values.
+    
+    """          
     coltypes                = ['Extraction','Scrub','Strip']
     ml2l                    = 0.001 # mililiter to liter
     scale                   = 1 # volumetric scaling from unit ml/sec
 
-    g_p_kg          = 1000 # grams to kg
-    s_p_h           = 3600 # seconds to hours
-    target_conc     =  45 #g/L
-    
-    def __init__(self,config_file,prep_capex=0, prep_opex=0, prep_revenue=0, prep_npv=0):
+    g_p_kg                  = 1000 # grams to kg
+    s_p_h                   = 3600 # seconds to hours
+    target_conc             =  45 #g/L
+
+
+    def __init__(self,confDict, confEnvDict, ree_mass):
+
                  
         """Constructor.
         """
-        
-        self.confDict = utilities.read_config(config_file)
+
+     
+        self.confDict = confDict 
         solventxHome = self.confDict["solventxHome"]
-        self.csvData = self.confDict['csvData']
+#        reeComps = self.confDict['compositions']
         self.xmlData = self.confDict['xmlData']
         self.modulesData = self.confDict['modules']      
-        
-        self.dfree = pd.read_csv(os.path.join(solventxHome, self.csvData['dfree'])) # ree feed compositions (g/L)
-        self.main_sx_feed = pd.read_csv(os.path.join(solventxHome, self.csvData['main_sx_feed'])) 
-        self.mw = pd.read_csv(os.path.join(solventxHome, self.csvData['mw'])) 
-        
-       
+               
         self.xml = os.path.join(solventxHome,self.xmlData['xml'],self.xmlData['phase']+'_'+''.join(self.modulesData["input"])+'.xml')
         
         # Set required data
-        self.df             = self.dfree              
-        self.mainsxflow     = self.main_sx_feed   # kg/hr
                  
         self.phase_names    = self.confDict["phasenames"] # from xml input file
         self.phase          = ct.import_phases(self.xml,self.phase_names) 
@@ -79,16 +119,10 @@ class solventx:
         self.mwre,\
         self.mwslv          = self.get_mw() # g/mol
         self.rhoslv         = [1000, 960, 750] # [g/L]
-   
-        self.ree_mass       = [self.df[ij][0] for ij in [kk+' (kg/hr)' for kk in self.ree] ]#
-        self.vol            = sum(self.ree_mass) / self.g_p_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
-        self.ree_conc       = [(ij/sum(self.ree_mass)) * self.target_conc for ij in self.ree_mass] #([kg/hr]/[kg/hr] )* [g/L] = [g/L]
-
+                        
+        self.purity_spec    = .985 # 
+        self.recov_spec     = .80 # 
         
-        self.purity_spec    = .99 # not needed?
-        self.recov_spec     = .99 # not needed?
-        
-        self.revenue        = [0,0,0]
         self.Ns             = [0,0,0]
 
         self.nsp            = pd.DataFrame() # feed streams (aq and org) for each column       
@@ -96,10 +130,43 @@ class solventx:
 
         self.y              = {} # all compositions
         self.Ns             = {}
+        self.constraint    = {}
+        
+  
+        self.get_conc(ree_mass)
+
+        self.get_process() 
+        
+        """ create variable space parameters and update optim attributes"""        
+        var_upper, var_lower, var_type = self.create_var_space(confEnvDict)
+        
+        self.dimension      = len(self.var_space['mutable'])
+
+        self.var_lower      = np.array([item for item in var_lower.values()])
+        self.var_upper      = np.array([item for item in var_upper.values()])             
+        self.var_type       = np.array([item for item in var_type.values()])
+        
+        
+        # Define penalty by column type
+        p0 = [5,0,10]
+        pen = {}
+        for item,jtem in zip(self.column, p0):
+            pen[item] = jtem
+
+        self.penalty = pen
+            
+        
+
+#%%
+    def get_conc(self,ree_mass):
+        self.ree_mass       = ree_mass
+        self.vol            = sum(self.ree_mass) / self.g_p_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
+        self.ree_conc       = [(ij/sum(self.ree_mass)) * self.target_conc for ij in self.ree_mass] #([kg/hr]/[kg/hr] )* [g/L] = [g/L]
+
 
     # -- end function
   
-
+#%%
     def get_mw(self, conv=ml2l):
         """ Initialize parameters for cantera simulation. init() calls this function"""
         
@@ -123,7 +190,7 @@ class solventx:
 
 
 
-
+#%%
     def get_process(self):
         """Get products."""
         
@@ -167,8 +234,8 @@ class solventx:
     
 
 
-
-    def create_var_space(self, input_feeds=1,): # 
+#%%
+    def create_var_space(self, confEnvDict, input_feeds=1,): # 
 
 
         var_space = {
@@ -178,6 +245,9 @@ class solventx:
         
         mod_space = {}
         x_space = {}
+        var_upper = {}
+        var_lower = {}
+        var_type = {}
         
         immutable_var_names = ['mol_frac']
         feed_var_names = ['(HA)2(org)']
@@ -211,8 +281,18 @@ class solventx:
         self.mod_space = mod_space
         self.x_space = x_space
         
+        var_config= confEnvDict['variable_config']
         
-		
+        for item in mutable.keys():
+            name,no = item.split('-')
+            var_upper[item] = var_config[name]['upper']
+            var_lower[item] = var_config[name]['lower']
+            var_type[item] = var_config[name]['type']
+            
+        return var_upper, var_lower, var_type
+        
+      
+#%%		
     def flow_path_exist(self, var): # Not used in current implementation
         '''
             Does a proper module exist to connect to var. 
@@ -236,6 +316,7 @@ class solventx:
 
 
 
+#%%
     def create_nsp_open(self, name, num ):# g_p_kg=g_p_kg ): #, h0, target, xml, cantera_data, experiments):
         
         """ Create mole flows for column feed streams in a given module. Arranges
@@ -248,9 +329,17 @@ class solventx:
         is_scrub            = [1 if re in strip_ree else 0 for re in self.ree]
 
         
-        # Determine if there is a parent column or not    
-        if int(num) > 0: # 
-            nnum = str(int(num)-1)
+        # Determine if there is a parent column. If so, match the organic flow into current extraction stage
+        # with flow from previous module strip column (which may or may not be the parent module)
+        parent_col = get_parent('Extraction-'+num)
+        if parent_col:
+            pname, pnum = parent_col.split('-')
+        else:
+            pnum = ''
+            
+        if pnum in self.modules.keys(): # if the parent is a module in this configuration
+#        if int(num) > 0: # 
+            nnum = str(int(num)-1) # since modules are numbered sequentially following organic flow
             salts = np.array(self.y['Strip-'+nnum][self.canteravars.index('(HA)2(org)')+1:self.nsy]) # organic exit rees
             n_HA = np.array(self.y['Strip-'+nnum][self.canteravars.index('(HA)2(org)')]) # organic exit rees
             vol_HA = n_HA / (self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')])
@@ -261,7 +350,8 @@ class solventx:
 
         else:            
         #        Compositions   
-            orgvol              = self.orgvol[int(num)]
+#            orgvol              = self.orgvol[int(num)]
+            orgvol              = self.orgvol[0]
             vol_HA              = orgvol *  (self.x[self.combined_var_space['(HA)2(org)-0']])
             vol_dodec           = orgvol - vol_HA                
             n_HA                = vol_HA * self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')] # [L/hr]*[g/L]/[g/mol] = [mol/hr]
@@ -278,8 +368,9 @@ class solventx:
             if k==0: # extraction column: 
                 #check if there's a parent column. if there isn't, use primary feed, otherwise, 
                 # take the corresponding parent aqueous composition data
-                parent_col = get_parent(self.column[k]+'-'+num) # if a parent module exists for ext column  
-                if parent_col: 
+
+                
+                if parent_col and pnum in self.modules.keys(): # current column has parent column, which actually exists in this configuration
                     myree =  np.array(self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])  
                     n_H2O = self.nsp[parent_col][self.canteranames.index('H2O(L)')]   
                     n_Hp  = self.x[self.combined_var_space['H+ '+self.column[k]+'-'+num]] * n_H2O / (self.rhoslv[self.solv.index('H2O(L)')]/self.mwslv[self.solv.index('H2O(L)')])
@@ -308,10 +399,8 @@ class solventx:
             self.nsp[self.column[k]+'-'+num]       = n_specs 
             self.nsp0[self.column[k]+'-'+num]      = n_specs
 
-
-
                 
-
+#%%
     def eval_column(self, num, col):
         
         """ This function evaluates the column to compute stream compositions
@@ -331,7 +420,7 @@ class solventx:
         return resy
 
 
-
+#%%
     def update_nsp(self, resy, prev_col, num):
         
         col_index = self.column.index(prev_col)+1
@@ -342,8 +431,45 @@ class solventx:
             self.nsp[col+'-'+num][self.naq:]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
                     [jk for jk in resy.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from previous column
 
+#%%
+    def objective(self, size=1):
+        
+        """ 
+        Compute objective function
+        in this case, make it recority
+        sum(recovery[i] * purity[i])
+        """
+        recority = {}
+        for key in self.recovery.keys():
+            recority[key] = np.array(self.purity[key])*np.array(self.recovery[key])
+        
+        self.recority = recority
+        fun = sum(sum(recority.values()))
+        return fun/size
+            
+#%% 
+    def constraintfun(self):
+        
+        """ 
+        Compute constraint function
+        use weighted penalty based on column type
+        c_i = max(0, spec-value_i)
+        """
+        c_purity = {}
+        c_recovery = {}
 
-    def evaluate_open(self, x,): #
+        for key in self.purity.keys():
+            name, no = key.split('-')
+            c_purity[key] = max(0, ((self.purity_spec -self.purity[key])*self.penalty[name]))
+            c_recovery[key] = max(0, sum([self.recov_spec-ktem for ktem in self.recovery[key]])*self.penalty[name])
+
+        self.constraint = {"purity":c_purity, "recovery":c_recovery}
+        
+        return sum(c_purity.values()),sum(c_recovery.values())
+
+
+#%%      
+    def evaluate(self, x,): #
         
         """ This is the simpler implementation of the process column design
             it avoids the need to converge recycle streams. For now, it is not
@@ -390,14 +516,22 @@ class solventx:
 
                 self.update_nsp(resy, col, num)
 
-#                
-        self.recovery_open()#(resy.x)        
+#       # estimate reward         
+        self.recovery_open()#(resy.x)     
+        
+        # estimate objective
+        fun = self.objective()
+        
+        # estimate constraints
+        c_pur, c_rec = self.constraintfun()
+        
+        return fun + c_pur + c_rec
       
 
 ############################################################################### 
             
  
-
+#%%
     def inity(self, col, num, Ns): # Initialize y
 
         y_i = []
@@ -412,7 +546,7 @@ class solventx:
             
 
 
-
+#%%
     def recovery_open(self):
         
         target = {}
@@ -457,14 +591,61 @@ class solventx:
         self.recovery = recovery
         self.target_rees = target
     
+
+#%%
+    def get_dimension(self):
+        """Return the dimension of the problem.
+
+        Returns
+        -------
+        int
+            The dimension of the problem.
+        """
+        return self.dimension
+    # -- end function
+    
+    def get_var_lower(self):        
+        """Return the array of lower bounds on the variables.
+
+        Returns
+        -------
+        List[float]
+            Lower bounds of the decision variables.
+        """
+        return self.var_lower
+    # -- end function
         
+    def get_var_upper(self):
+        """Return the array of upper bounds on the variables.
+
+        Returns
+        -------
+        List[float]
+            Upper bounds of the decision variables.
+        """
+        return self.var_upper
+    # -- end function
+
+    def get_var_type(self):
+        """Return the type of each variable.
+        
+        Returns
+        -------
+        1D numpy.ndarray[char]
+            An array of length equal to dimension, specifying the type
+            of each variable. Possible types are 'R' for real
+            (continuous) variables, and 'I' for integer (discrete)
+            variables.
+        """
+        return self.var_type        
 # -- end class
 
 #####################################################################################################       
-#------------------------------HELPER FUNCTIONS------------------------------
+"""------------------------------HELPER FUNCTIONS------------------------------"""
 
 
 #reverse key value pairs 
+#%%
 def reverse_dict(D):
 	return {v: k for k, v in D.items()}
 
@@ -567,7 +748,7 @@ def get_level(curNum):
 
    
 
-
+#%%
 def eColOne (yI, obj, num, column, Ns, ree=[]) : # This should be equivalent to actual Lyon et al 4 recycling
 
     y                       = np.array([i for i in yI])
@@ -634,7 +815,7 @@ def eColOne (yI, obj, num, column, Ns, ree=[]) : # This should be equivalent to 
     return yI-y  
 
 
-
+#%%
 def flatten(iter):
   if type(iter) == dict:
     return np.array(list(iter.values())).reshape(1, -1)[0]

@@ -1,1 +1,1 @@
-from solventx._version import __version__
+# __init__.py

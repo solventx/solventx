@@ -1,10 +1,14 @@
 #Utility functions for Gym
 import json
+import numpy as np
+import math
 from solventx import config
-
+from solventx import templates
 
 def read_config(file_name):
     """Load config json file and return dictionary."""
+    
+    print ('ola ola olaaaaaaa .......\n', file_name, 'ola ola olaaaaaaa ......\n')
     
     with open(file_name, "r") as config_file:
         print(f'Reading configuration file:{config_file.name}')
@@ -55,9 +59,54 @@ def get_process(obj):
 
 
 
+def generate(confDict, N):
+    
+    reeComps        = confDict['compositions']
+    modulesData     = confDict['modules']      
+    ree             = modulesData["input"]
+
+    upper           = [reeComps[i]['upper'] for i in ree]
+    lower           = [reeComps[i]['lower'] for i in ree]
+    
+    ree_mass_dict   = dict()
+    
+    for index in range(N): # N represents number of ree composition cases
+        ree_mass_dict[str(index)] = {}
+        ree_mass = [np.random.uniform(i,j) for i,j in zip(lower, upper)]  # select composition from bounds
+        for item,jtem in zip(ree, ree_mass):
+            ree_mass_dict[str(index)][item] = jtem
+    
+    with open('.\\solventx\\data\\json\\cases.json','w') as json_file:
+        json.dump(ree_mass_dict, json_file)   
+        
+    return ree_mass_dict
 
 
 
-
+def get_env_config_dict(config_file):
+    """Read config file create confi dict."""
+    
+    assert 'json' in config_file, 'Config file must be a json file!'
+    config_keys = templates.config_keys
+    
+    design_config = read_config(config_file)
+    
+    config_dict = {}
+    for key in config_keys:
+        if key in design_config.keys():
+            config_dict.update({key:design_config[key]})
+        else:
+            raise ValueError(f'{key} not found in config JSON file!')
+   
+#    variable_config= config_dict['variable_config']
+#    upper = [variable_config[jtem]['upper'] for jtem in variable_config.keys() ]
+#    lower = [variable_config[jtem]['lower'] for jtem in variable_config.keys() ]
+#    vtype = [variable_config[jtem]['type'] for jtem in variable_config.keys() ]
+#
+#    config_dict.update({'lower':lower})   
+#    config_dict.update({'upper':upper})   
+#    config_dict.update({'type':vtype})   
+    
+    return config_dict 
 
     
