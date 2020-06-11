@@ -1,0 +1,16 @@
+{
+"variable_config": {"(HA)2(org)":    {"lower": 0.2,"upper": 0.6,"delta":0.05,"scale":"linear","type":"R"}, 
+                    "H+ Extraction": {"lower": 1.00E-05, "upper": 2,"delta":5, "scale":"pH","initial_value":1.00E-04,"type":"R"}, 
+                    "H+ Scrub":      {"lower": 1.00E-05, "upper": 2,"delta":5, "scale":"pH","initial_value":1.00E-04,"type":"R"}, 
+                    "H+ Strip":      {"lower": 1.00E-05, "upper": 2,"delta":5, "scale":"pH","initial_value":2.0,"type":"R"}, 
+                    "OA Extraction": {"lower": 0.5,      "upper": 5.5,"delta":0.05, "scale":"linear","type":"R"}, 
+                    "OA Scrub":      {"lower": 0.5,      "upper": 5.5,"delta":0.05, "scale":"linear","type":"R"}, 
+                    "OA Strip":      {"lower": 0.5,      "upper": 5.5,"delta":0.05, "scale":"linear","type":"R"}, 
+                    "Recycle":       {"lower": 0,        "upper": 1,"delta":0.05, "scale":"linear","type":"R"}, 
+                    "Extraction":    {"lower": 2,        "upper": 8,"delta":1, "scale":"discrete","type":"I"}, 
+                    "Scrub":         {"lower": 2,        "upper": 8,"delta":1, "scale":"discrete","type":"I"}, 
+                    "Strip":         {"lower": 2,        "upper": 6,"delta":1, "scale":"discrete","type":"I"}
+                   },   
+"environment_config":{"random_seed":"","goals":{"recority":{},"recovery":{"success_threshold":0.9},"purity":{"success_threshold":0.985}}
+                     }
+}

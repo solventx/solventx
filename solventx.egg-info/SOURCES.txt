@@ -1,0 +1,13 @@
+README.md
+setup.py
+solventx/__init__.py
+solventx/_version.py
+solventx/config.py
+solventx/result_struct.py
+solventx/solventx.py
+solventx/utilities.py
+solventx.egg-info/PKG-INFO
+solventx.egg-info/SOURCES.txt
+solventx.egg-info/dependency_links.txt
+solventx.egg-info/requires.txt
+solventx.egg-info/top_level.txt
