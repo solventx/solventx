@@ -1,5 +1,6 @@
 #Utility functions for Gym
 import json
+import os
 import numpy as np
 import math
 from solventx import config
@@ -61,6 +62,7 @@ def get_process(obj):
 
 def generate(confDict, N):
     
+    home_dir = confDict['solventxHome']
     reeComps        = confDict['compositions']
     modulesData     = confDict['modules']      
     ree             = modulesData["input"]
@@ -76,7 +78,7 @@ def generate(confDict, N):
         for item,jtem in zip(ree, ree_mass):
             ree_mass_dict[str(index)][item] = jtem
     
-    with open('.\\solventx\\data\\json\\cases.json','w') as json_file:
+    with open(os.path.join(home_dir,'.\\solventx\\data\\json\\cases.json'),'w') as json_file:
         json.dump(ree_mass_dict, json_file)   
         
     return ree_mass_dict
