@@ -13,7 +13,6 @@ RBFOPT details:
 -(C) Copyright International Business Machines Corporation 2016.
 -Research partially supported by SUTD-MIT International Design Center.
 
-
 """
 
 from __future__ import print_function
@@ -63,9 +62,9 @@ class solventx(rbfopt.RbfoptBlackBox):
     ml2l                    = 0.001 # mililiter to liter
     scale                   = 1 # volumetric scaling from unit ml/sec
 
-    g_p_kg                  = 1000 # grams to kg
-    s_p_h                   = 3600 # seconds to hours
-    target_conc             =  45 #g/L
+    g_p_kg          = 1000 # grams to kg
+    s_p_h           = 3600 # seconds to hours
+    target_conc     =  45 #g/L
 
 
     def __init__(self,confDict, confEnvDict, ree_mass):
@@ -120,8 +119,8 @@ class solventx(rbfopt.RbfoptBlackBox):
         self.mwslv          = self.get_mw() # g/mol
         self.rhoslv         = [1000, 960, 750] # [g/L]
                         
-        self.purity_spec    = .985 # 
-        self.recov_spec     = .80 # 
+        self.purity_spec    = .985 # not needed?
+        self.recov_spec     = .80 # not needed?
         
         self.Ns             = [0,0,0]
 
@@ -132,7 +131,6 @@ class solventx(rbfopt.RbfoptBlackBox):
         self.Ns             = {}
         self.constraint    = {}
         
-  
         self.get_conc(ree_mass)
 
         self.get_process() 
@@ -157,7 +155,7 @@ class solventx(rbfopt.RbfoptBlackBox):
             
         
 
-#%%
+
     def get_conc(self,ree_mass):
         self.ree_mass       = ree_mass
         self.vol            = sum(self.ree_mass) / self.g_p_kg / self.target_conc   # [kg/hr]*[g/kg] /[g/L] = [L/hr] 
@@ -166,7 +164,7 @@ class solventx(rbfopt.RbfoptBlackBox):
 
     # -- end function
   
-#%%
+
     def get_mw(self, conv=ml2l):
         """ Initialize parameters for cantera simulation. init() calls this function"""
         
@@ -190,7 +188,7 @@ class solventx(rbfopt.RbfoptBlackBox):
 
 
 
-#%%
+
     def get_process(self):
         """Get products."""
         
@@ -219,22 +217,23 @@ class solventx(rbfopt.RbfoptBlackBox):
         modules = config.valid_processes[config_key]['modules']
         x = []
        
-        print(f'Process config {config_key}:Input:{input_components},Number of modules:{len(modules)}')
-        print('Modules info:')
+#        print(f'Process config {config_key}:Input:{input_components},Number of modules:{len(modules)}')
+#        print('Modules info:')
         for key,module in modules.items():
             x.extend(module['x'])
-            print(f'Module {key}:{module["strip_group"]}')
-        print(f'x0:{x}')
+#            print(f'Module {key}:{module["strip_group"]}')
+#        print(f'x0:{x}')
         
         self.design_variables = x
         self.modules = modules
         self.num_input = n_components
         self.config_key = config_key
+        self.num_modules = len(self.modules)
         
     
 
 
-#%%
+
     def create_var_space(self, confEnvDict, input_feeds=1,): # 
 
 
@@ -292,7 +291,7 @@ class solventx(rbfopt.RbfoptBlackBox):
         return var_upper, var_lower, var_type
         
       
-#%%		
+		
     def flow_path_exist(self, var): # Not used in current implementation
         '''
             Does a proper module exist to connect to var. 
@@ -315,8 +314,6 @@ class solventx(rbfopt.RbfoptBlackBox):
 
 
 
-
-#%%
     def create_nsp_open(self, name, num ):# g_p_kg=g_p_kg ): #, h0, target, xml, cantera_data, experiments):
         
         """ Create mole flows for column feed streams in a given module. Arranges
@@ -339,7 +336,11 @@ class solventx(rbfopt.RbfoptBlackBox):
             
         if pnum in self.modules.keys(): # if the parent is a module in this configuration
 #        if int(num) > 0: # 
-            nnum = str(int(num)-1) # since modules are numbered sequentially following organic flow
+            if int(num) - int(pnum) > 1:
+                nnum = str(int(num)-2) # since there is a gap in module index, so organic flow traces back two steps 
+            else:                
+                nnum = str(int(num)-1) # since modules are numbered sequentially following organic flow      
+            
             salts = np.array(self.y['Strip-'+nnum][self.canteravars.index('(HA)2(org)')+1:self.nsy]) # organic exit rees
             n_HA = np.array(self.y['Strip-'+nnum][self.canteravars.index('(HA)2(org)')]) # organic exit rees
             vol_HA = n_HA / (self.rhoslv[self.solv.index('(HA)2(org)')]/self.mwslv[self.solv.index('(HA)2(org)')])
@@ -368,7 +369,8 @@ class solventx(rbfopt.RbfoptBlackBox):
             if k==0: # extraction column: 
                 #check if there's a parent column. if there isn't, use primary feed, otherwise, 
                 # take the corresponding parent aqueous composition data
-
+#                parent_col = get_parent(self.column[k]+'-'+num) # if a parent module exists for ext column  
+                #if parent_col:
                 
                 if parent_col and pnum in self.modules.keys(): # current column has parent column, which actually exists in this configuration
                     myree =  np.array(self.y[parent_col][-self.nsy+self.canteravars.index('H+')+1:-self.norgy])  
@@ -400,7 +402,7 @@ class solventx(rbfopt.RbfoptBlackBox):
             self.nsp0[self.column[k]+'-'+num]      = n_specs
 
                 
-#%%
+
     def eval_column(self, num, col):
         
         """ This function evaluates the column to compute stream compositions
@@ -420,7 +422,7 @@ class solventx(rbfopt.RbfoptBlackBox):
         return resy
 
 
-#%%
+
     def update_nsp(self, resy, prev_col, num):
         
         col_index = self.column.index(prev_col)+1
@@ -431,8 +433,8 @@ class solventx(rbfopt.RbfoptBlackBox):
             self.nsp[col+'-'+num][self.naq:]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
                     [jk for jk in resy.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from previous column
 
-#%%
-    def objective(self, size=1):
+
+    def objective(self):
         
         """ 
         Compute objective function
@@ -440,14 +442,16 @@ class solventx(rbfopt.RbfoptBlackBox):
         sum(recovery[i] * purity[i])
         """
         recority = {}
+        norm = (self.num_target - self.num_modules)# normalizer
         for key in self.recovery.keys():
             recority[key] = np.array(self.purity[key])*np.array(self.recovery[key])
         
         self.recority = recority
-        fun = sum(sum(recority.values()))
-        return fun/size
+        #fun = sum(sum(recority.values()))
+        fun = sum([np.mean(i) for i in self.recority.values()])
+        return fun/norm # Normalize to unity
             
-#%% 
+ 
     def constraintfun(self):
         
         """ 
@@ -457,6 +461,7 @@ class solventx(rbfopt.RbfoptBlackBox):
         """
         c_purity = {}
         c_recovery = {}
+        norm = (self.num_target - self.num_modules)# normalizer
 
         for key in self.purity.keys():
             name, no = key.split('-')
@@ -465,10 +470,9 @@ class solventx(rbfopt.RbfoptBlackBox):
 
         self.constraint = {"purity":c_purity, "recovery":c_recovery}
         
-        return sum(c_purity.values()),sum(c_recovery.values())
+        return sum(c_purity.values())/norm,sum(c_recovery.values())/norm
 
-
-#%%      
+      
     def evaluate(self, x,): #
         
         """ This is the simpler implementation of the process column design
@@ -531,7 +535,7 @@ class solventx(rbfopt.RbfoptBlackBox):
 ############################################################################### 
             
  
-#%%
+
     def inity(self, col, num, Ns): # Initialize y
 
         y_i = []
@@ -546,41 +550,63 @@ class solventx(rbfopt.RbfoptBlackBox):
             
 
 
-#%%
+
     def recovery_open(self):
         
         target = {}
         recovery = {}
         streams = {}
-        feeds = {}
+        feeds = {} # feed streams, excluding those from parent column
+        allfeeds = {} # all feed streams, irrespective of whether child or parent exists
         purity = {}
     
-        mod_nums = [key for key in config.valid_processes[self.config_key]['modules']]
+        mod_nums = [key for key in config.valid_processes[self.config_key]['modules']] # list of module numbers in current configuration
     
-        for key in config.valid_processes[self.config_key]['modules']:
+        for key in mod_nums: #config.valid_processes[self.config_key]['modules']:
         
             for col in self.column:
+
+                allfeeds[col+'-'+key] = self.nsp[col+'-'+key][self.canteranames.index('Cl-')+1:self.naq].values 
                 
                 if get_child(col+'-'+key, mod_nums) == None:
+                    
+#                    print (col+'-'+key,'has no child')
                 
                     if col == 'Strip':
                         target[col+'-'+key] = config.valid_processes[self.config_key]['modules'][key]['strip_group'] # strip target
                     else:
                         target[col+'-'+key] = config.valid_processes[self.config_key]['modules'][key]['ext_group'] # non-strip target                                     
                     
-                    streams[col+'-'+key] = self.y[col+'-'+key][-self.nsy+self.canteravars.index('H+')+1:-self.norgy]
-                    feeds[col+'-'+key] = self.nsp[col+'-'+key][self.canteranames.index('Cl-')+1:self.naq].values
+                    streams[col+'-'+key] = self.y[col+'-'+key][-self.nsy+self.canteravars.index('H+')+1:-self.norgy] # all exit streams
+                    #feeds[col+'-'+key] = self.nsp[col+'-'+key][self.canteranames.index('Cl-')+1:self.naq].values
                     
                     pure                 = [ij/sum(streams[col+'-'+key]) for ij in streams[col+'-'+key]]
                     purity[col+'-'+key]  = sum([pure[self.ree.index(ik)] for ik in target[col+'-'+key] ] )
                     
-    
-        feed_input = [0 for item in feeds[col+'-'+key]]            
-        for key, value in feeds.items():
-            feed_input = [ij + jk for ij, jk in zip(feed_input, value)] 
+#####################################################################################################################################################
+#                    Feed streams include feeds to all columns except extraction columns that do have
+#                    a parent column in current configuration
+                if col == 'Extraction':
+                    nne = get_parent(col+'-'+key) # find parent
+                    if nne == None: # no parent
+                        feeds[col+'-'+key] = allfeeds[col+'-'+key] 
+                    else:
+                        afa, ogu = get_parent(col+'-'+key).split('-') # get parent column index
+                        if ogu not in mod_nums: 
+                            feeds[col+'-'+key] = allfeeds[col+'-'+key]
+
+                if col != 'Extraction':
+                    feeds[col+'-'+key] = allfeeds[col+'-'+key]
+                    
+
+        feed_input = [0 for item in feeds[col+'-'+key]]   # does not matter; any 'feed' would do         
+        for k, v in feeds.items():
+            feed_input = [ij + jk for ij, jk in zip(feed_input, v)] 
+#            print (k, 'feed input', feed_input)
     
         for key, value in streams.items():
             recover =  [ij/jk for ij, jk in zip(value, feed_input)]       
+#            recover =  [0 if jk==0 for ij, jk in zip(value, feed_input) else ij/jk ]       
             recovery[key] = [recover[self.ree.index(ik)] for ik in target[key]]
                     
                     
@@ -589,10 +615,12 @@ class solventx(rbfopt.RbfoptBlackBox):
         self.total_feeds = {ij:jk for ij, jk in zip(self.ree, feed_input)}
         self.purity = purity
         self.recovery = recovery
+#        print (recovery)
         self.target_rees = target
-    
+        self.num_target = len(self.target_rees)
+        
+        
 
-#%%
     def get_dimension(self):
         """Return the dimension of the problem.
 
@@ -645,7 +673,6 @@ class solventx(rbfopt.RbfoptBlackBox):
 
 
 #reverse key value pairs 
-#%%
 def reverse_dict(D):
 	return {v: k for k, v in D.items()}
 
@@ -693,17 +720,25 @@ def get_child(var, mod_nums):
   '''
  
   name, num = var.split('-')
+  
+  if name == 'Extraction':
+      dir = 'right'
+  else:
+      dir = 'left'
+      
   if name == 'Scrub':
       return None
   else:
-      child = get_next(num,name)
+      child = get_next(num,dir)
+      #print('child', child)
+      #print('str(child)', str(child))
       if str(child) in mod_nums:
           return 'Extraction-'+str(child)
       else:
           return None
       
         
-        
+
 def get_next(item_num, dir):
     '''
       returns next node number in tree in dir specified
@@ -716,6 +751,7 @@ def get_next(item_num, dir):
       get_next(2, 'left') => 5
       get_next(1, 'right') => 4 
     '''
+    #print ('direction', dir)
     item_num   = int(item_num)
     level, pos = get_level(item_num)
     next_level = pow(2, level+1) #items in next level
@@ -723,6 +759,7 @@ def get_next(item_num, dir):
     left       = item_num + add
     
     return (left, left+1)[dir=='right']
+
 
 
         
@@ -748,7 +785,7 @@ def get_level(curNum):
 
    
 
-#%%
+
 def eColOne (yI, obj, num, column, Ns, ree=[]) : # This should be equivalent to actual Lyon et al 4 recycling
 
     y                       = np.array([i for i in yI])
@@ -815,7 +852,7 @@ def eColOne (yI, obj, num, column, Ns, ree=[]) : # This should be equivalent to 
     return yI-y  
 
 
-#%%
+
 def flatten(iter):
   if type(iter) == dict:
     return np.array(list(iter.values())).reshape(1, -1)[0]

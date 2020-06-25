@@ -1,8 +1,8 @@
 #Utility functions for Gym
 import json
-import os
 import numpy as np
 import math
+import rbfopt
 from solventx import config
 from solventx import templates
 
@@ -62,7 +62,6 @@ def get_process(obj):
 
 def generate(confDict, N):
     
-    home_dir = confDict['solventxHome']
     reeComps        = confDict['compositions']
     modulesData     = confDict['modules']      
     ree             = modulesData["input"]
@@ -78,7 +77,7 @@ def generate(confDict, N):
         for item,jtem in zip(ree, ree_mass):
             ree_mass_dict[str(index)][item] = jtem
     
-    with open(os.path.join(home_dir,'.\\solventx\\data\\json\\cases.json'),'w') as json_file:
+    with open('.\\solventx\\data\\json\\cases.json','w') as json_file:
         json.dump(ree_mass_dict, json_file)   
         
     return ree_mass_dict
@@ -100,15 +99,46 @@ def get_env_config_dict(config_file):
         else:
             raise ValueError(f'{key} not found in config JSON file!')
    
-#    variable_config= config_dict['variable_config']
-#    upper = [variable_config[jtem]['upper'] for jtem in variable_config.keys() ]
-#    lower = [variable_config[jtem]['lower'] for jtem in variable_config.keys() ]
-#    vtype = [variable_config[jtem]['type'] for jtem in variable_config.keys() ]
-#
-#    config_dict.update({'lower':lower})   
-#    config_dict.update({'upper':upper})   
-#    config_dict.update({'type':vtype})   
     
     return config_dict 
 
+
+def optimize(myb, iters=100, strategy='lhd_corr',target=1, restarts=3):
+    
+    # Specify optimization settings
+    settings = rbfopt.RbfoptSettings(max_evaluations=iters, init_strategy=strategy, target_objval=target, max_noisy_restarts=restarts) #'lhd_corr')#, minlp_solver_path=minlp_solver, nlp_solver_path=nlp_solver) 
+
+    myb.max_iter = settings.max_evaluations    
+    alg = rbfopt.RbfoptAlgorithm(settings, myb) 
+    rbfopt.RbfoptSettings()
+
+    # call optimizer
+    val, x, itercount,evalcount, fast_evalcount = alg.optimize()
+
+    
+    """ Get Results """   
+    myb.evaluate(x) # Recycle all ree
+    
+    for i,j in zip(myb.var_space['mutable'], x):    
+        print(i, '\t',j)
+
+    
+    """ store results in json   """
+    result = dict()
+    result["rees"] = myb.cases
+    result["design x"] = [item for item in x]
+    result["recovery"] = myb.recovery
+    result["purity"] = myb.purity
+    
+    result["objective"] = {}
+    for key,value in myb.recority.items():
+        result["objective"][key] = [item for item in value]
+    
+    result["function value"] = val
+    result["constraints"] = myb.constraint
+    result["variable space"] = myb.var_space["mutable"]
+    result["design"] = {item:jtem for (item,jtem) in zip(myb.var_space["mutable"].keys(),x)}
+    
+    
+    return result
     
