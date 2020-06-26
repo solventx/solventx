@@ -3,8 +3,13 @@ import json
 import numpy as np
 import math
 import rbfopt
+import os
+import solventx
 from solventx import config
 from solventx import templates
+
+dirlocation= os.path.dirname(solventx.__file__)
+dirlocation = dirlocation[0:len(dirlocation)-8]
 
 def read_config(file_name):
     """Load config json file and return dictionary."""
@@ -77,7 +82,7 @@ def generate(confDict, N):
         for item,jtem in zip(ree, ree_mass):
             ree_mass_dict[str(index)][item] = jtem
     
-    with open('.\\solventx\\data\\json\\cases.json','w') as json_file:
+    with open(os.path.join(dirlocation,'.\\solventx\\data\\json\\cases.json'),'w') as json_file:
         json.dump(ree_mass_dict, json_file)   
         
     return ree_mass_dict
