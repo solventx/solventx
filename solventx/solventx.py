@@ -529,7 +529,7 @@ class solventx(rbfopt.RbfoptBlackBox):
         # estimate constraints
         c_pur, c_rec = self.constraintfun()
         
-        return fun + c_pur + c_rec
+        return c_pur + c_rec - fun # penalty - recority
       
 
 ############################################################################### 

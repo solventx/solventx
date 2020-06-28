@@ -1,5 +1,5 @@
 {
-"solventxHome": "D:\\github\\optim-solventx",
+"solventxHome": "D:\\github\\solventx",
 "xmlData":{"xml":"solventx\\data\\xml","phase":"PC88A_HCL"},
 "solvents": ["H2O(L)", "(HA)2(org)", "dodecane"],
 "modules":{"input":["Nd","Pr"],

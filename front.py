@@ -28,7 +28,7 @@ for item in ['a','b','c','d','e','f']:
 
     t0 = time.time()
     
-    config_file = ".\\design_"+item+".json"
+    config_file = ".\\configurations\design_"+item+".json"
     confDict = util.read_config(config_file)
     
     config_env_file = ".\\env_design_config.json"
