@@ -7,9 +7,9 @@
                     "OA Scrub":      {"lower": 0.5,      "upper": 5.5,"delta":0.05, "scale":"linear","type":"R"}, 
                     "OA Strip":      {"lower": 0.5,      "upper": 5.5,"delta":0.05, "scale":"linear","type":"R"}, 
                     "Recycle":       {"lower": 0,        "upper": 1,"delta":0.05, "scale":"linear","type":"R"}, 
-                    "Extraction":    {"lower": 2,        "upper": 8,"delta":1, "scale":"discrete","type":"I"}, 
-                    "Scrub":         {"lower": 2,        "upper": 8,"delta":1, "scale":"discrete","type":"I"}, 
-                    "Strip":         {"lower": 2,        "upper": 6,"delta":1, "scale":"discrete","type":"I"}
+                    "Extraction":    {"lower": 2,        "upper": 14,"delta":1, "scale":"discrete","type":"I"}, 
+                    "Scrub":         {"lower": 2,        "upper": 14,"delta":1, "scale":"discrete","type":"I"}, 
+                    "Strip":         {"lower": 2,        "upper": 10,"delta":1, "scale":"discrete","type":"I"}
                    },   
 "environment_config":{"random_seed":"","goals":{"recority":{},"recovery":{"success_threshold":0.9},"purity":{"success_threshold":0.985}}
                      }

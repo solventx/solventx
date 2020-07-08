@@ -6,8 +6,8 @@ Created on Wed Mar 18 12:43:20 2020
 """
 
 DEFAULT_module0_x = [0.65,1e-4,1e-4,2,2,4,6,.8,8,10,4] #
-DEFAULT_module1_x =      [1e-5,1e-5,1.2,6,1,4,0.51,1,8,2]
-DEFAULT_module2_x =      [1e-5,1e-5,1.2,6,1,1,0.01,4,9,2]
+DEFAULT_module1_x =      [1e-5,1e-5,1.2,2,4,6,0.51,6,8,2]
+DEFAULT_module2_x =      [1e-5,1e-5,1.2,2,4,6,0.5,4,9,2]
 
 mutable_var_names   = ['H+ Extraction', 'H+ Scrub', 'H+ Strip', 'OA Extraction', 'OA Scrub', 'OA Strip', 'Recycle', 'Extraction', 'Scrub', 'Strip']
 

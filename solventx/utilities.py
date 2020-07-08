@@ -134,6 +134,8 @@ def optimize(myb, iters=100, strategy='lhd_corr',target=1, restarts=3):
     result["design x"] = [item for item in x]
     result["recovery"] = myb.recovery
     result["purity"] = myb.purity
+    result["target rees"] = myb.target_rees
+#    result["recority"] = myb.recority
     
     result["objective"] = {}
     for key,value in myb.recority.items():

@@ -146,7 +146,7 @@ class solventx(rbfopt.RbfoptBlackBox):
         
         
         # Define penalty by column type
-        p0 = [5,0,10]
+        p0 = [10,0,10]
         pen = {}
         for item,jtem in zip(self.column, p0):
             pen[item] = jtem
@@ -429,11 +429,16 @@ class solventx(rbfopt.RbfoptBlackBox):
         
         if col_index <= 2:            
             col = self.column[col_index] #self.column.index(col_index)]
-                        
-            self.nsp[col+'-'+num][self.naq:]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
+
+# Pandas complains about setting value to a copy of a slice,                        
+#            self.nsp[col+'-'+num][self.naq:]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
+#                    [jk for jk in resy.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from previous column
+
+            self.nsp.loc[self.naq:, (col+'-'+num)]  =   [ resy.x[self.canteravars.index('(HA)2(org)')] ] + [self.nsp[col+'-'+num][self.canteranames.index('dodecane')] ]+\
                     [jk for jk in resy.x[self.canteravars.index('(HA)2(org)')+1:self.nsy]]  # org exit from previous column
 
-
+                
+                
     def objective(self):
         
         """ 
@@ -443,6 +448,7 @@ class solventx(rbfopt.RbfoptBlackBox):
         """
         recority = {}
         norm = (self.num_target - self.num_modules)# normalizer
+        norm = 1
         for key in self.recovery.keys():
             recority[key] = np.array(self.purity[key])*np.array(self.recovery[key])
         
@@ -462,10 +468,12 @@ class solventx(rbfopt.RbfoptBlackBox):
         c_purity = {}
         c_recovery = {}
         norm = (self.num_target - self.num_modules)# normalizer
+        norm = 1
 
         for key in self.purity.keys():
             name, no = key.split('-')
-            c_purity[key] = max(0, ((self.purity_spec -self.purity[key])*self.penalty[name]))
+#            c_purity[key] = max(0, ((self.purity_spec -self.purity[key])*self.penalty[name]))
+            c_purity[key] = max(0, sum([self.purity_spec-ktem for ktem in self.purity[key]])*self.penalty[name])
             c_recovery[key] = max(0, sum([self.recov_spec-ktem for ktem in self.recovery[key]])*self.penalty[name])
 
         self.constraint = {"purity":c_purity, "recovery":c_recovery}
@@ -580,8 +588,8 @@ class solventx(rbfopt.RbfoptBlackBox):
                     streams[col+'-'+key] = self.y[col+'-'+key][-self.nsy+self.canteravars.index('H+')+1:-self.norgy] # all exit streams
                     #feeds[col+'-'+key] = self.nsp[col+'-'+key][self.canteranames.index('Cl-')+1:self.naq].values
                     
-                    pure                 = [ij/sum(streams[col+'-'+key]) for ij in streams[col+'-'+key]]
-                    purity[col+'-'+key]  = sum([pure[self.ree.index(ik)] for ik in target[col+'-'+key] ] )
+                    pure                 = [0 if sum(streams[col+'-'+key])==0 else ij/sum(streams[col+'-'+key]) for ij in streams[col+'-'+key]]
+                    purity[col+'-'+key]  = [sum([pure[self.ree.index(ik)] for ik in target[col+'-'+key] ] )]
                     
 #####################################################################################################################################################
 #                    Feed streams include feeds to all columns except extraction columns that do have
@@ -605,8 +613,8 @@ class solventx(rbfopt.RbfoptBlackBox):
 #            print (k, 'feed input', feed_input)
     
         for key, value in streams.items():
-            recover =  [ij/jk for ij, jk in zip(value, feed_input)]       
-#            recover =  [0 if jk==0 for ij, jk in zip(value, feed_input) else ij/jk ]       
+#            recover =  [ij/jk for ij, jk in zip(value, feed_input)]       
+            recover =  [0 if jk==0 else ij/jk for ij, jk in zip(value, feed_input) ]       
             recovery[key] = [recover[self.ree.index(ik)] for ik in target[key]]
                     
                     

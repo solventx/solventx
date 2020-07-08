@@ -24,7 +24,8 @@ Optimize solvent extraction configuration
 Main Section of Code: Call the Optimizer
 """    
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-for item in ['a','b','c','d','e','f']:
+#for item in ['a','b','c','d','e','f']:
+for item in ['a']:
 
     t0 = time.time()
     
@@ -45,7 +46,7 @@ for item in ['a','b','c','d','e','f']:
     """ instantiate solvent extraction object """
     myb = sx.solventx(confDict, confEnvDict, ree_mass) 
     myb.cases = cases['0']
-    iters = 15 # Number of iteration, at least 100 
+    iters = 400 # Number of iteration, at least 100 
     
     resjsn = util.optimize(myb,iters)
     #
@@ -57,8 +58,13 @@ t2 = time.time()
 print('\nPrep Time', t1-t0)
 print('Optim Time', t2-t1)
 print('Total Time', t2-t0)
+print()
 
-
+for key, value in resjsn["recovery"].items():
+    print()
+    print(key)
+    for item, jtem, ktem in zip(resjsn["target rees"][key], resjsn["recovery"][key], resjsn["purity"][key]):
+        print(item,'->recovery:', jtem, ' ->purity:', ktem)
 #print('\nRecovery: ', resjsn["recovery"]['Strip-0'])
 #print('Purity: ', resjsn["purity"]['Strip-0'])
 #
@@ -70,10 +76,10 @@ print('Total Time', t2-t0)
 Secondary Section of Code: When not optimizing
 """    
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-#
+
 ##for item in ['a','b','c','d','e','f']:
-#for item in ['e']:
-#    config_file = ".\\design_"+item+".json"
+#for item in ['a']:
+#    config_file = ".\\configurations\design_"+item+".json"
 #    confDict = util.read_config(config_file)
 #    
 #    config_env_file = ".\\env_design_config.json"
@@ -91,15 +97,21 @@ Secondary Section of Code: When not optimizing
 #    fun = obj.objective()
 #    pur, rec = obj.constraintfun()
 #    
-#    print ('Design case ', item)
-#    print('Recovery',obj.recovery)
-##    print ('Purity\n', obj.purity)
-#    print ('Reward',obj.objective())
-#    print('$$$$$$$$$$$$$$$$$$$$\n')
-
-
-
-
+##    print ('Design case ', item)
+##    print('Recovery',obj.recovery)
+###    print ('Purity\n', obj.purity)
+##    print ('Reward',obj.objective())
+##    print('$$$$$$$$$$$$$$$$$$$$\n')
+#
+##for item in ['0','1','2']:
+##    print('\nExtraction-'+item)
+##    for ntem in range(obj.naq):
+##        print (obj.canteranames[ntem], obj.nsp['Extraction-'+item][ntem])
+#
+##for item in ['0','1','2']:
+##    print('Module '+item)
+##    for jtem in obj.coltypes:
+##        print (jtem, obj.canteranames[obj.canteranames.index('Nd+++')], obj.nsp['Extraction-'+item][obj.canteranames.index('Nd+++')])
 
 
 
