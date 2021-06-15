@@ -1,6 +1,6 @@
 {
-"solventxHome": "D:\\github\\solventx",
-"xmlData":{"xml":"solventx\\data\\xml","phase":"PC88A_HCL"},
+"solventxHome": "/home/splathottam/GitHub/solventx",
+"xmlData":{"xml":"solventx/data/xml","phase":"PC88A_HCL"},
 "solvents": ["H2O(L)", "(HA)2(org)", "dodecane"],
 "modules":{"input":["Nd","Pr","Ce","La"],
            "output":{"strip":[""]}

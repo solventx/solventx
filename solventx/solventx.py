@@ -417,7 +417,7 @@ class solventx(rbfopt.RbfoptBlackBox):
                     
         else:
             ycol                = self.inity(col,num, Ns) # initialize y (stream vector)      
-            resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='df-sane', options=None) # method='hybr', options=None) #options={'disp':True, 'maxfev':15}    
+            resy               = root(eColOne, ycol, args=(self, num, col, Ns), method='hybr', options=None) # method='hybr','df-sane' options=None) #options={'disp':True, 'maxfev':15}    
 
         return resy
 
